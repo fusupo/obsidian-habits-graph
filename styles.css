@@ -1,8 +1,172 @@
-/*
+/* Org Habits Graph Styles - Org-mode inspired */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* Each habit is a row with label on left, graph on right */
+.habit-graph-row {
+	display: flex;
+	align-items: center;
+	margin-bottom: 0;
+	padding: 0.1em 0;
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+	line-height: 1.2;
+}
 
-If your plugin does not need CSS, delete this file.
+.habit-label {
+	flex: 0 0 200px;
+	padding-right: 1em;
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 
+/* Wrapper to contain scrollable graph */
+.habit-graph-wrapper {
+	flex: 1;
+	min-width: 0;
+	position: relative;
+}
+
+/* Graph: Grid of colored blocks */
+.habit-graph {
+	display: flex;
+	gap: 1px;
+}
+
+/* Mobile: make graph scrollable horizontally */
+@media (max-width: 768px) {
+	.habit-label {
+		flex: 0 0 120px; /* Narrower labels on mobile */
+	}
+
+	.habit-graph-wrapper {
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-x;
+
+		/* Hide scrollbar on mobile but keep scroll functionality */
+		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none; /* IE/Edge */
+	}
+
+	.habit-graph-wrapper::-webkit-scrollbar {
+		display: none; /* Chrome/Safari */
+	}
+
+	.habit-graph {
+		min-width: max-content; /* Force graph to be full width on mobile */
+	}
+}
+
+.habit-day {
+	width: 14px;
+	height: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	font-weight: bold;
+	cursor: help;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.habit-day:hover {
+	transform: scale(1.2);
+	z-index: 10;
+	box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Org-mode color scheme:
+   Blue = not due yet
+   Green = could be done / was done
+   Yellow = going overdue (today, not done)
+   Red = overdue / missed
 */
+
+.habit-day.blue {
+	background-color: #7aa6da; /* Blue - not to be done yet */
+	color: white;
+}
+
+.habit-day.green {
+	background-color: #5cb85c; /* Green - could be/was done */
+	color: white;
+}
+
+.habit-day.green-light {
+	background-color: #90ee90; /* Light green - good time to do (future) */
+	color: black;
+}
+
+.habit-day.yellow {
+	background-color: #f0ad4e; /* Yellow - going overdue */
+	color: black;
+}
+
+.habit-day.red {
+	background-color: #d9534f; /* Red - overdue/missed */
+	color: white;
+}
+
+.today-indicator {
+	font-weight: bold;
+}
+
+/* Error and Empty States */
+.habit-graph-error,
+.habit-graph-empty {
+	padding: 2em;
+	text-align: center;
+	color: var(--text-muted);
+}
+
+.habit-graph-error h3,
+.habit-graph-empty h3 {
+	color: var(--text-normal);
+	margin-bottom: 0.5em;
+}
+
+.habit-graph-error p,
+.habit-graph-empty p {
+	margin-bottom: 1em;
+}
+
+.habit-graph-empty pre {
+	text-align: left;
+	background-color: var(--background-secondary);
+	padding: 1em;
+	border-radius: 4px;
+	font-size: 0.85em;
+	overflow-x: auto;
+}
+
+.habit-graph-error a {
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.habit-graph-error a:hover {
+	text-decoration: underline;
+}
+
+/* Dark mode adjustments */
+.theme-dark .habit-day.blue {
+	background-color: #5f89ac;
+}
+
+.theme-dark .habit-day.green {
+	background-color: #4a934a;
+}
+
+.theme-dark .habit-day.green-light {
+	background-color: #6db36d;
+}
+
+.theme-dark .habit-day.yellow {
+	background-color: #c8883e;
+}
+
+.theme-dark .habit-day.red {
+	background-color: #b43c39;
+}
