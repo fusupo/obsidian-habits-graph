@@ -129,6 +129,12 @@ export class GraphRenderer {
 		const cleanName = habitName.replace(/#habit/g, '').trim();
 		labelContainer.textContent = cleanName;
 
+		// Display streak count if enabled
+		if (showStreak && streak > 0) {
+			const streakEl = labelContainer.createSpan({ cls: 'habit-streak' });
+			streakEl.textContent = ` 🔥${streak}`;
+		}
+
 		// Right side: Wrapper for scrollable graph
 		const graphWrapper = container.createDiv({ cls: 'habit-graph-wrapper' });
 

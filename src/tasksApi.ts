@@ -15,7 +15,7 @@ export class TasksApiWrapper {
 	constructor(private app: App) {}
 
 	getTasksPlugin(): any {
-		return this.app.plugins.getPlugin('obsidian-tasks-plugin');
+		return (this.app as any).plugins.getPlugin('obsidian-tasks-plugin');
 	}
 
 	isTasksPluginAvailable(): boolean {
