@@ -23,6 +23,66 @@ export class TasksApiWrapper {
 		return plugin !== null && plugin !== undefined;
 	}
 
+	/** Task emoji markers used by the Tasks plugin */
+	private static readonly TASK_EMOJIS = ['📅', '⏳', '🛫', '✅', '🔁', '⏫', '🔼', '🔽', '🆔', '⛔', '🔺', '➕'] as const;
+
+	/**
+	 * Find the position of the first task-related emoji in a string.
+	 * Returns -1 if no emoji found.
+	 */
+	private findFirstEmojiPosition(text: string): number {
+		let firstPos = -1;
+		for (const emoji of TasksApiWrapper.TASK_EMOJIS) {
+			const pos = text.indexOf(emoji);
+			if (pos !== -1 && (firstPos === -1 || pos < firstPos)) {
+				firstPos = pos;
+			}
+		}
+		return firstPos;
+	}
+
+	/**
+	 * Extract description from task content.
+	 * Description is everything before the first task emoji.
+	 */
+	private extractDescription(taskContent: string): string {
+		const firstEmojiPos = this.findFirstEmojiPosition(taskContent);
+		if (firstEmojiPos === -1) {
+			// No emojis found, entire content is description
+			return taskContent.trim();
+		}
+		return taskContent.substring(0, firstEmojiPos).trim();
+	}
+
+	/**
+	 * Extract recurrence pattern from task content.
+	 * Handles various formats: "every day", "every 2 days", "every week on Sunday", etc.
+	 */
+	private extractRecurrence(taskContent: string): string {
+		// Match 🔁 followed by recurrence text (stop at next emoji, tag, or end)
+		const recurrenceMatch = taskContent.match(/🔁\s*(.+?)(?=\s*[📅⏳🛫✅⏫🔼🔽🆔⛔🔺➕#]|$)/);
+		return recurrenceMatch ? recurrenceMatch[1].trim() : '';
+	}
+
+	/**
+	 * Extract and validate a date from task content using the given emoji marker.
+	 * Returns undefined if date not found or invalid.
+	 */
+	private extractDate(taskContent: string, emoji: string): string | undefined {
+		const datePattern = new RegExp(`${emoji}\\s*(\\d{4}-\\d{2}-\\d{2})`);
+		const match = taskContent.match(datePattern);
+		if (!match) return undefined;
+
+		const dateStr = match[1];
+		// Validate the date is actually valid
+		const date = new Date(dateStr);
+		if (isNaN(date.getTime())) {
+			console.debug(`[habits-graph] Invalid date format: ${dateStr}`);
+			return undefined;
+		}
+		return dateStr;
+	}
+
 	/**
 	 * Parse tasks from markdown content
 	 * This is a simple parser that looks for Tasks plugin format
@@ -44,24 +104,17 @@ export class TasksApiWrapper {
 			// Check for recurrence emoji 🔁
 			if (!taskContent.includes('🔁')) continue;
 
-			// Extract description (everything before emojis)
-			const descMatch = taskContent.match(/^([^📅⏳🛫✅🔁]+)/);
-			const description = descMatch ? descMatch[1].trim() : taskContent;
+			// Extract task components using robust helpers
+			const description = this.extractDescription(taskContent);
+			const recurrence = this.extractRecurrence(taskContent);
 
-			// Extract recurrence
-			const recurrenceMatch = taskContent.match(/🔁\s+([^📅⏳🛫✅#]+)/);
-			const recurrence = recurrenceMatch ? recurrenceMatch[1].trim() : '';
-
-			// Extract tags
+			// Extract tags (can appear anywhere in the task)
 			const tagMatches = taskContent.matchAll(/#([\w-]+)/g);
 			const tags = Array.from(tagMatches, m => m[1]);
 
-			// Extract dates
-			const completedDateMatch = taskContent.match(/✅\s+(\d{4}-\d{2}-\d{2})/);
-			const completedDate = completedDateMatch ? completedDateMatch[1] : undefined;
-
-			const dueDateMatch = taskContent.match(/📅\s+(\d{4}-\d{2}-\d{2})/);
-			const dueDate = dueDateMatch ? dueDateMatch[1] : undefined;
+			// Extract dates with validation
+			const completedDate = this.extractDate(taskContent, '✅');
+			const dueDate = this.extractDate(taskContent, '📅');
 
 			tasks.push({
 				description,
