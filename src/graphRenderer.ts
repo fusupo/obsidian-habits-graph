@@ -1,4 +1,4 @@
-import { formatISODate, getTodayUTC, isSameDay } from './utils/dateUtils';
+import { formatISODate, getTodayUTC, isSameDay, addDays } from './utils/dateUtils';
 
 export interface DayCell {
 	date: Date;
@@ -40,8 +40,7 @@ export class GraphRenderer {
 
 		// Generate cells from past to future
 		for (let i = -daysBefore; i <= daysAfter; i++) {
-			const date = new Date(today);
-			date.setDate(date.getDate() + i);
+			const date = addDays(today, i);
 
 			const dateStr = this.dateToString(date);
 			const isToday = i === 0;
