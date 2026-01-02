@@ -1,3 +1,5 @@
+import { formatISODate } from './utils/dateUtils';
+
 export interface DayCell {
 	date: Date;
 	isToday: boolean;
@@ -295,9 +297,11 @@ export class GraphRenderer {
 	}
 
 	/**
-	 * Convert date to YYYY-MM-DD string
+	 * Convert date to YYYY-MM-DD string using UTC-aware formatting.
+	 *
+	 * Delegates to formatISODate for consistent UTC-based date serialization.
 	 */
 	static dateToString(date: Date): string {
-		return date.toISOString().split('T')[0];
+		return formatISODate(date);
 	}
 }

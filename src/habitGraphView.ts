@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type OrgHabitsGraphPlugin from './main';
 import { GraphRenderer } from './graphRenderer';
+import { formatISODate } from './utils/dateUtils';
 
 export const VIEW_TYPE_HABIT_GRAPH = 'habit-graph-view';
 
@@ -70,7 +71,7 @@ export class HabitGraphView extends ItemView {
 				description
 			);
 
-			console.log('  Completion dates:', completionDates.length, completionDates.map(d => d.toISOString().split('T')[0]));
+			console.log('  Completion dates:', completionDates.length, completionDates.map(d => formatISODate(d)));
 
 			// Generate day cells with recurrence pattern for scheduling window
 			const cells = GraphRenderer.generateDayCells(
