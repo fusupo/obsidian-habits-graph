@@ -1,4 +1,5 @@
 import { App, TFile } from 'obsidian';
+import { parseISODate } from './utils/dateUtils';
 
 export interface TaskInfo {
 	description: string;
@@ -67,6 +68,8 @@ export class TasksApiWrapper {
 	/**
 	 * Extract and validate a date from task content using the given emoji marker.
 	 * Returns undefined if date not found or invalid.
+	 *
+	 * Uses UTC-aware parseISODate for validation to ensure timezone-independent behavior.
 	 */
 	private extractDate(taskContent: string, emoji: string): string | undefined {
 		const datePattern = new RegExp(`${emoji}\\s*(\\d{4}-\\d{2}-\\d{2})`);
@@ -74,13 +77,14 @@ export class TasksApiWrapper {
 		if (!match) return undefined;
 
 		const dateStr = match[1];
-		// Validate the date is actually valid
-		const date = new Date(dateStr);
-		if (isNaN(date.getTime())) {
+		// Validate the date is actually valid using UTC-aware parsing
+		try {
+			parseISODate(dateStr);
+			return dateStr;
+		} catch (error) {
 			console.debug(`[habits-graph] Invalid date format: ${dateStr}`);
 			return undefined;
 		}
-		return dateStr;
 	}
 
 	/**
@@ -158,7 +162,10 @@ export class TasksApiWrapper {
 	}
 
 	/**
-	 * Group completed instances of the same habit
+	 * Group completed instances of the same habit.
+	 *
+	 * Parses completion dates using UTC-aware parseISODate to ensure
+	 * consistent date handling across timezones.
 	 */
 	getCompletionHistory(tasks: TaskInfo[], habitDescription: string): Date[] {
 		return tasks
@@ -167,7 +174,7 @@ export class TasksApiWrapper {
 				task.completed &&
 				task.completedDate
 			)
-			.map(task => new Date(task.completedDate!))
+			.map(task => parseISODate(task.completedDate!))
 			.sort((a, b) => a.getTime() - b.getTime());
 	}
 
