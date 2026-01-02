@@ -89,25 +89,45 @@ export class GraphRenderer {
 
 	/**
 	 * Parse recurrence pattern to get interval in days
+	 *
+	 * Supported patterns:
+	 * - "daily" or "every day" → 1 day
+	 * - "every N days" (e.g., "every 2 days", "every 10 days") → N days
+	 * - "weekly" or "every week" → 7 days
+	 * - "every N weeks" (e.g., "every 2 weeks", "every 4 weeks") → N * 7 days
+	 * - "monthly" or "every month" → 30 days
+	 *
+	 * Unrecognized patterns will log a console warning and default to daily (1 day).
+	 *
+	 * @param pattern - The recurrence pattern string (case-insensitive)
+	 * @returns The interval in days
 	 */
 	private static parseRecurrenceInterval(pattern: string): number {
 		pattern = pattern.toLowerCase();
 
+		// Check exact/simple patterns first
 		if (pattern.includes('every day') || pattern.includes('daily')) {
 			return 1;
-		} else if (pattern.includes('every 2 days')) {
-			return 2;
-		} else if (pattern.includes('every 3 days')) {
-			return 3;
 		} else if (pattern.includes('every week') || pattern.includes('weekly')) {
 			return 7;
-		} else if (pattern.includes('every 2 weeks')) {
-			return 14;
 		} else if (pattern.includes('every month') || pattern.includes('monthly')) {
 			return 30;
 		}
 
-		// Default to daily
+		// Try generalized "every N days" pattern
+		const daysMatch = pattern.match(/every (\d+) days?/i);
+		if (daysMatch) {
+			return parseInt(daysMatch[1]);
+		}
+
+		// Try generalized "every N weeks" pattern
+		const weeksMatch = pattern.match(/every (\d+) weeks?/i);
+		if (weeksMatch) {
+			return parseInt(weeksMatch[1]) * 7;
+		}
+
+		// Unrecognized pattern - log warning and default to daily
+		console.warn(`Unrecognized recurrence pattern: "${pattern}". Defaulting to daily (1 day). Supported patterns: daily, every N days, weekly, every N weeks, monthly.`);
 		return 1;
 	}
 
