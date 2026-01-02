@@ -1,4 +1,4 @@
-import { formatISODate } from './utils/dateUtils';
+import { formatISODate, getTodayUTC, isSameDay } from './utils/dateUtils';
 
 export interface DayCell {
 	date: Date;
@@ -22,8 +22,7 @@ export class GraphRenderer {
 		recurrencePattern: string = 'every day'
 	): DayCell[] {
 		const cells: DayCell[] = [];
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
+		const today = getTodayUTC();
 
 		// Create set of completion dates for fast lookup
 		const completionSet = new Set(
@@ -270,8 +269,7 @@ export class GraphRenderer {
 	static calculateStreak(completionDates: Date[]): number {
 		if (completionDates.length === 0) return 0;
 
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
+		const today = getTodayUTC();
 
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
@@ -280,14 +278,11 @@ export class GraphRenderer {
 		let currentDate = new Date(today);
 
 		for (const completionDate of sorted) {
-			const compDate = new Date(completionDate);
-			compDate.setHours(0, 0, 0, 0);
-
-			// Check if this completion is for current date or previous day
-			if (compDate.getTime() === currentDate.getTime()) {
+			// Check if this completion is for current date or previous day (using UTC comparison)
+			if (isSameDay(completionDate, currentDate)) {
 				streak++;
-				currentDate.setDate(currentDate.getDate() - 1);
-			} else if (compDate.getTime() < currentDate.getTime()) {
+				currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+			} else if (completionDate.getTime() < currentDate.getTime()) {
 				// Gap in streak
 				break;
 			}
