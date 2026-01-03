@@ -58,10 +58,6 @@ export class HabitGraphView extends ItemView {
 
 		// Render each habit graph
 		for (const [description, tasks] of habits) {
-			console.log('Habit:', description);
-			console.log('  Total tasks:', tasks.length);
-			console.log('  Completed tasks:', tasks.filter(t => t.completed).length);
-
 			// Get the most recent task info for this habit
 			const currentTask = tasks.find(t => !t.completed) || tasks[tasks.length - 1];
 
@@ -70,8 +66,6 @@ export class HabitGraphView extends ItemView {
 				tasks,
 				description
 			);
-
-			console.log('  Completion dates:', completionDates.length, completionDates.map(d => formatISODate(d)));
 
 			// Generate day cells with recurrence pattern for scheduling window
 			const cells = GraphRenderer.generateDayCells(
