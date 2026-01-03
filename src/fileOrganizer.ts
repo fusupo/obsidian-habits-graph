@@ -10,8 +10,6 @@ export class FileOrganizer {
 		const content = await this.vault.read(file);
 		const lines = content.split('\n');
 
-		console.log('FileOrganizer: Processing file:', file.path);
-
 		// First pass: identify all active habits and their completed instances
 		const activeHabits = new Map<string, { activeLine: number; completedLines: number[] }>();
 
@@ -20,20 +18,15 @@ export class FileOrganizer {
 
 			if (this.isActiveHabitTask(line)) {
 				const name = this.extractTaskName(line);
-				console.log('Found active habit:', name, 'at line', i);
 				if (!activeHabits.has(name)) {
 					activeHabits.set(name, { activeLine: i, completedLines: [] });
 				}
 			} else if (this.isCompletedHabitTask(line) && !this.isIndented(line)) {
 				// Only process completed tasks that are NOT already indented
 				const name = this.extractTaskName(line);
-				console.log('Found completed habit:', name, 'at line', i);
 				// Find the active habit for this completed task
 				if (activeHabits.has(name)) {
 					activeHabits.get(name)!.completedLines.push(i);
-					console.log('  -> Matched with active habit');
-				} else {
-					console.log('  -> No active habit found for this');
 				}
 			}
 		}
@@ -76,10 +69,7 @@ export class FileOrganizer {
 
 		// Only write if content changed
 		if (newContent !== content) {
-			console.log('FileOrganizer: Content changed, writing to file');
 			await this.vault.modify(file, newContent);
-		} else {
-			console.log('FileOrganizer: No changes needed');
 		}
 	}
 

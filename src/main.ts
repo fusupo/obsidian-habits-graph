@@ -11,13 +11,11 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 	fileOrganizer: FileOrganizer;
 
 	async onload() {
-		console.log('Org Habits Graph: Plugin loading...');
 		await this.loadSettings();
 
 		// Initialize Tasks API wrapper
 		this.tasksApi = new TasksApiWrapper(this.app);
 		this.fileOrganizer = new FileOrganizer(this.app.vault);
-		console.log('Org Habits Graph: Initialized');
 
 		// Check if Tasks plugin is available
 		if (!this.tasksApi.isTasksPluginAvailable()) {
@@ -59,14 +57,11 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 			id: 'organize-habit-file',
 			name: 'Organize habits in current file',
 			editorCallback: async (editor, view) => {
-				console.log('Organize command called');
 				const file = view.file;
-				console.log('Current file:', file?.path);
 				if (file) {
 					await this.fileOrganizer.organizeHabitFile(file);
 					new Notice('Habit tasks organized!');
 				} else {
-					console.log('No file found');
 					new Notice('No file open');
 				}
 			}
