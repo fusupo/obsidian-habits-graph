@@ -4,18 +4,31 @@ import { TasksApiWrapper } from './tasksApi';
 import { HabitGraphView, VIEW_TYPE_HABIT_GRAPH } from './habitGraphView';
 import { FileOrganizer } from './fileOrganizer';
 import { GraphRenderer } from './graphRenderer';
+import { TaskCacheManager } from './cache/TaskCacheManager';
+import { VaultEventHandler } from './events/VaultEventHandler';
 
 export default class OrgHabitsGraphPlugin extends Plugin {
 	settings: HabitGraphSettings;
 	tasksApi: TasksApiWrapper;
 	fileOrganizer: FileOrganizer;
+	cacheManager: TaskCacheManager;
+	eventHandler: VaultEventHandler;
 
 	async onload() {
 		await this.loadSettings();
 
+		// Initialize cache manager (lazy - populated on first use)
+		this.cacheManager = new TaskCacheManager();
+
 		// Initialize Tasks API wrapper
 		this.tasksApi = new TasksApiWrapper(this.app);
+		// Connect TasksApiWrapper to cache for performance
+		this.tasksApi.setPlugin(this);
 		this.fileOrganizer = new FileOrganizer(this.app.vault);
+
+		// Setup vault event handlers for cache invalidation
+		this.eventHandler = new VaultEventHandler(this, this.cacheManager);
+		this.eventHandler.setupEventListeners();
 
 		// Check if Tasks plugin is available
 		if (!this.tasksApi.isTasksPluginAvailable()) {
@@ -77,6 +90,23 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 			}
 		});
 
+		// Add command to show cache statistics
+		this.addCommand({
+			id: 'show-cache-stats',
+			name: 'Show cache statistics',
+			callback: () => {
+				const stats = this.cacheManager.getStats();
+				const memoryMB = (stats.memoryEstimate / 1024 / 1024).toFixed(2);
+				new Notice(
+					`📊 Task Cache Statistics\n\n` +
+					`Files cached: ${stats.cachedFiles}\n` +
+					`Total tasks: ${stats.totalTasks}\n` +
+					`Memory usage: ~${memoryMB} MB`,
+					8000
+				);
+			}
+		});
+
 		// Add settings tab
 		this.addSettingTab(new HabitGraphSettingTab(this.app, this));
 
@@ -108,6 +138,25 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 	onunload() {
 		// Cleanup
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_HABIT_GRAPH);
+		// Clear cache on plugin unload
+		this.cacheManager.clearCache();
+	}
+
+	/**
+	 * Get all tasks with caching.
+	 * Uses cache-first approach with lazy initialization.
+	 * Event handlers keep cache synchronized with file changes.
+	 */
+	async getCachedTasks() {
+		// Lazy initialization: populate cache on first call
+		if (this.cacheManager.isEmpty()) {
+			const { parseTasksFromAllFiles } = await import('./utils/taskParser');
+			const tasksByFile = await parseTasksFromAllFiles(this.app.vault);
+			this.cacheManager.bulkSet(tasksByFile);
+		}
+
+		// Return all cached tasks (O(1) operation after initialization)
+		return this.cacheManager.getAllCachedTasks();
 	}
 
 	async loadSettings() {

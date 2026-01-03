@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-habits-graph",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Org-mode style habit consistency graphs for Tasks plugin",
 	"main": "main.js",
 	"scripts": {
