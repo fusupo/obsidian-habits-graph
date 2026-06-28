@@ -116,6 +116,10 @@ src/
 - Common classes: `Plugin`, `Modal`, `Notice`, `PluginSettingTab`, `Setting`, `Editor`, `MarkdownView`
 - API docs: https://docs.obsidian.md and https://github.com/obsidianmd/obsidian-api
 
+## Project Context
+
+@PROJECT_LORE.md
+
 ## Additional Resources
 
 Detailed project conventions and best practices are documented in AGENTS.md, which includes:
