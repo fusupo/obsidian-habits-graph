@@ -181,11 +181,18 @@ function pick<T>(fm: Record<string, unknown>, ...keys: string[]): T | undefined 
 	return undefined;
 }
 
+function titleFromPath(filePath: string): string {
+	const basename = filePath.split('/').pop() ?? filePath;
+	return basename.replace(/\.md$/i, '');
+}
+
 export function parseTaskNoteFromFrontmatter(
 	frontmatter: Record<string, unknown> | null | undefined,
 	filePath: string
 ): TaskNote | null {
-	if (!frontmatter || !frontmatter['title']) return null;
+	if (!frontmatter) return null;
+	// A TaskNote must have either a title or a recurrence field
+	if (!frontmatter['title'] && !frontmatter['recurrence']) return null;
 
 	const recurrenceAnchorRaw = pick<string>(frontmatter, 'recurrence_anchor', 'recurrenceAnchor');
 	const recurrenceAnchor: 'scheduled' | 'completion' =
@@ -193,7 +200,7 @@ export function parseTaskNoteFromFrontmatter(
 
 	return {
 		id: frontmatter['id'] != null ? String(frontmatter['id']) : undefined,
-		title: String(frontmatter['title']),
+		title: frontmatter['title'] != null ? String(frontmatter['title']) : titleFromPath(filePath),
 		status: frontmatter['status'] != null ? String(frontmatter['status']) : 'open',
 		recurrence: frontmatter['recurrence'] != null ? String(frontmatter['recurrence']) : '',
 		recurrenceAnchor,
