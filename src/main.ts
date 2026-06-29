@@ -1,8 +1,7 @@
-import { Notice, Plugin, WorkspaceLeaf, TFile, MarkdownPostProcessorContext } from 'obsidian';
+import { Notice, Plugin, WorkspaceLeaf, MarkdownPostProcessorContext } from 'obsidian';
 import { HabitGraphSettings, DEFAULT_SETTINGS, HabitGraphSettingTab } from './settings';
 import { TasksApiWrapper } from './tasksApi';
 import { HabitGraphView, VIEW_TYPE_HABIT_GRAPH } from './habitGraphView';
-import { FileOrganizer } from './fileOrganizer';
 import { GraphRenderer } from './graphRenderer';
 import { TaskCacheManager } from './cache/TaskCacheManager';
 import { VaultEventHandler } from './events/VaultEventHandler';
@@ -10,7 +9,6 @@ import { VaultEventHandler } from './events/VaultEventHandler';
 export default class OrgHabitsGraphPlugin extends Plugin {
 	settings: HabitGraphSettings;
 	tasksApi: TasksApiWrapper;
-	fileOrganizer: FileOrganizer;
 	cacheManager: TaskCacheManager;
 	eventHandler: VaultEventHandler;
 
@@ -24,7 +22,6 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 		this.tasksApi = new TasksApiWrapper(this.app);
 		// Connect TasksApiWrapper to cache for performance
 		this.tasksApi.setPlugin(this);
-		this.fileOrganizer = new FileOrganizer(this.app.vault);
 
 		// Setup vault event handlers for cache invalidation
 		this.eventHandler = new VaultEventHandler(this, this.cacheManager, this.app);
@@ -59,31 +56,6 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 			}
 		});
 
-		// Add command to organize current file
-		this.addCommand({
-			id: 'organize-habit-file',
-			name: 'Organize habits in current file',
-			editorCallback: async (editor, view) => {
-				const file = view.file;
-				if (file) {
-					await this.fileOrganizer.organizeHabitFile(file);
-					new Notice('Habit tasks organized!');
-				} else {
-					new Notice('No file open');
-				}
-			}
-		});
-
-		// Add command to organize all habit files
-		this.addCommand({
-			id: 'organize-all-habit-files',
-			name: 'Organize habits in all files',
-			callback: async () => {
-				const count = await this.fileOrganizer.organizeAllHabitFiles();
-				new Notice(`Organized ${count} file(s) with habit tasks`);
-			}
-		});
-
 		// Add command to show cache statistics
 		this.addCommand({
 			id: 'show-cache-stats',
@@ -109,20 +81,12 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 			await this.renderHabitGraphCodeBlock(source, el, ctx);
 		});
 
-		// Auto-refresh and auto-organize when files change (debounced)
+		// Auto-refresh when files change (debounced)
 		let refreshTimeout: NodeJS.Timeout;
 		this.registerEvent(
-			this.app.vault.on('modify', async (file) => {
+			this.app.vault.on('modify', () => {
 				clearTimeout(refreshTimeout);
-				refreshTimeout = setTimeout(async () => {
-					// Auto-organize if enabled
-					if (this.settings.autoOrganizeOnModify && file instanceof TFile) {
-						const content = await this.app.vault.read(file);
-						if (content.includes('#habit') && content.includes('🔁')) {
-							await this.fileOrganizer.organizeHabitFile(file);
-						}
-					}
-					// Refresh view
+				refreshTimeout = setTimeout(() => {
 					this.refreshView();
 				}, 1000);
 			})
@@ -139,7 +103,7 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 	async getCachedTaskNotes() {
 		if (this.cacheManager.isEmpty()) {
 			const { parseTaskNotesFromAllFiles } = await import('./utils/taskParser');
-			const tasksByFile = parseTaskNotesFromAllFiles(this.app.vault, this.app.metadataCache);
+			const tasksByFile = parseTaskNotesFromAllFiles(this.app.vault, this.app.metadataCache, this.settings.taskFolderPath);
 			this.cacheManager.bulkSet(tasksByFile);
 		}
 
@@ -215,15 +179,17 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 
 		for (const task of habitTasks) {
 			const completionDates = this.tasksApi.getCompletionHistory(task);
+			const skippedDates = this.tasksApi.getSkippedDates(task);
 
 			const cells = GraphRenderer.generateDayCells(
 				completionDates,
 				this.settings.daysBeforeToday,
 				this.settings.daysAfterToday,
-				task.recurrence
+				task.recurrence,
+				skippedDates
 			);
 
-			const streak = GraphRenderer.calculateStreak(completionDates);
+			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates);
 
 			const graphEl = GraphRenderer.renderGraph(
 				cells,

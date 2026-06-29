@@ -6,7 +6,7 @@ export interface HabitGraphSettings {
 	daysBeforeToday: number;
 	daysAfterToday: number;
 	showStreakCount: boolean;
-	autoOrganizeOnModify: boolean;
+	taskFolderPath: string;
 }
 
 export const DEFAULT_SETTINGS: HabitGraphSettings = {
@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS: HabitGraphSettings = {
 	daysBeforeToday: 21,
 	daysAfterToday: 7,
 	showStreakCount: true,
-	autoOrganizeOnModify: true
+	taskFolderPath: '',
 };
 
 export class HabitGraphSettingTab extends PluginSettingTab {
@@ -81,13 +81,15 @@ export class HabitGraphSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Auto-organize on file change')
-			.setDesc('Automatically indent completed tasks under active tasks when files are modified')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autoOrganizeOnModify)
+			.setName('Task folder path')
+			.setDesc('Only scan this folder for task notes (leave empty to scan entire vault)')
+			.addText(text => text
+				.setPlaceholder('e.g. tasks/')
+				.setValue(this.plugin.settings.taskFolderPath)
 				.onChange(async (value) => {
-					this.plugin.settings.autoOrganizeOnModify = value;
+					this.plugin.settings.taskFolderPath = value;
 					await this.plugin.saveSettings();
 				}));
+
 	}
 }

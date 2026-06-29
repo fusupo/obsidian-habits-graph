@@ -18,7 +18,8 @@ export class TasksApiWrapper {
 		}
 
 		// Fallback: parse all files (no caching)
-		const tasksByFile = parseTaskNotesFromAllFiles(this.app.vault, this.app.metadataCache);
+		const folderPath = this.plugin?.settings?.taskFolderPath ?? '';
+		const tasksByFile = parseTaskNotesFromAllFiles(this.app.vault, this.app.metadataCache, folderPath);
 		return Array.from(tasksByFile.values());
 	}
 
@@ -31,6 +32,12 @@ export class TasksApiWrapper {
 
 	getCompletionHistory(task: TaskNote): Date[] {
 		return task.completeInstances
+			.map(dateStr => parseISODate(dateStr))
+			.sort((a, b) => a.getTime() - b.getTime());
+	}
+
+	getSkippedDates(task: TaskNote): Date[] {
+		return task.skippedInstances
 			.map(dateStr => parseISODate(dateStr))
 			.sort((a, b) => a.getTime() - b.getTime());
 	}

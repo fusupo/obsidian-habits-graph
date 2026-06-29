@@ -8,7 +8,7 @@ export interface DayCell {
 	isFuture: boolean;
 	completed: boolean;
 	daysFromLastCompletion: number;
-	status: 'done' | 'missed' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed';
+	status: 'done' | 'missed' | 'skipped' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed';
 }
 
 export class GraphRenderer {
@@ -20,7 +20,8 @@ export class GraphRenderer {
 		completionDates: Date[],
 		daysBefore: number,
 		daysAfter: number,
-		recurrencePattern: string = 'every day'
+		recurrencePattern: string = 'every day',
+		skippedDates: Date[] = []
 	): DayCell[] {
 		const cells: DayCell[] = [];
 		const today = getTodayUTC();
@@ -28,6 +29,10 @@ export class GraphRenderer {
 		// Create set of completion dates for fast lookup
 		const completionSet = new Set(
 			completionDates.map(d => this.dateToString(d))
+		);
+
+		const skippedSet = new Set(
+			skippedDates.map(d => this.dateToString(d))
 		);
 
 		// Find last completion date
@@ -57,7 +62,7 @@ export class GraphRenderer {
 			let status: DayCell['status'];
 
 			if (isToday) {
-				status = completed ? 'today-done' : 'today-missed';
+				status = completed ? 'today-done' : skippedSet.has(dateStr) ? 'skipped' : 'today-missed';
 			} else if (isFuture) {
 				// Org-mode style scheduling for future days
 				// Based on days since last completion
@@ -71,7 +76,7 @@ export class GraphRenderer {
 					status = 'future-overdue'; // Red - overdue
 				}
 			} else {
-				status = completed ? 'done' : 'missed';
+				status = completed ? 'done' : skippedSet.has(dateStr) ? 'skipped' : 'missed';
 			}
 
 			cells.push({
@@ -174,6 +179,9 @@ export class GraphRenderer {
 				case 'missed':
 					colorClass = 'red';
 					break;
+				case 'skipped':
+					colorClass = 'gray';
+					break;
 				case 'future-too-early':
 					colorClass = 'blue';
 					break;
@@ -199,6 +207,8 @@ export class GraphRenderer {
 			// Add asterisk for completed days
 			if (cell.completed) {
 				dayEl.textContent = '*';
+			} else if (cell.status === 'skipped') {
+				dayEl.textContent = '~';
 			}
 
 			// Add exclamation mark for today
@@ -212,7 +222,7 @@ export class GraphRenderer {
 			// Tooltip
 			const dateStr = this.dateToString(cell.date);
 			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
-			const statusText = cell.completed ? 'Done' : (cell.isFuture ? 'Not due' : 'Missed');
+			const statusText = cell.completed ? 'Done' : cell.status === 'skipped' ? 'Skipped' : (cell.isFuture ? 'Not due' : 'Missed');
 			dayEl.setAttribute('title', `${dayName} ${dateStr}: ${statusText}`);
 		}
 
@@ -222,7 +232,7 @@ export class GraphRenderer {
 	/**
 	 * Calculate current streak
 	 */
-	static calculateStreak(completionDates: Date[]): number {
+	static calculateStreak(completionDates: Date[], skippedDates: Date[] = []): number {
 		if (completionDates.length === 0) return 0;
 
 		const today = getTodayUTC();
@@ -230,16 +240,23 @@ export class GraphRenderer {
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
 
+		const skippedSet = new Set(
+			skippedDates.map(d => formatISODate(d))
+		);
+
 		let streak = 0;
 		let currentDate = new Date(today);
 
 		for (const completionDate of sorted) {
-			// Check if this completion is for current date or previous day (using UTC comparison)
+			// Skip over skipped days (they don't break the streak)
+			while (skippedSet.has(formatISODate(currentDate)) && currentDate.getTime() > completionDate.getTime()) {
+				currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+			}
+
 			if (isSameDay(completionDate, currentDate)) {
 				streak++;
 				currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 			} else if (completionDate.getTime() < currentDate.getTime()) {
-				// Gap in streak
 				break;
 			}
 		}
