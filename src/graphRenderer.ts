@@ -220,7 +220,9 @@ export class GraphRenderer {
 					break;
 			}
 
-			dayEl.addClass(colorClass);
+			if (colorClass) {
+				dayEl.addClass(colorClass);
+			}
 
 			// Add asterisk for completed days
 			if (cell.completed) {
