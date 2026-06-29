@@ -63,23 +63,17 @@ export function formatISODate(date: Date): string {
 }
 
 /**
- * Get the current date as midnight UTC.
+ * Get the current LOCAL date as a UTC-midnight Date object.
  *
- * This ensures "today" is consistent for all users regardless of timezone.
- * A user at 11pm PST will get the same "today" as a user at 2am EST.
- *
- * @returns Date object representing today at midnight UTC
- *
- * @example
- * const today = getTodayUTC();
- * // Returns: Date representing current calendar day at 00:00:00 UTC
+ * Uses local date components so "today" matches the user's wall clock,
+ * then wraps in Date.UTC for consistent date arithmetic.
  */
 export function getTodayUTC(): Date {
 	const now = new Date();
 	return new Date(Date.UTC(
-		now.getUTCFullYear(),
-		now.getUTCMonth(),
-		now.getUTCDate()
+		now.getFullYear(),
+		now.getMonth(),
+		now.getDate()
 	));
 }
 

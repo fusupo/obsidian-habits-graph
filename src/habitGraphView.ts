@@ -47,15 +47,17 @@ export class HabitGraphView extends ItemView {
 
 		for (const task of habitTasks) {
 			const completionDates = this.plugin.tasksApi.getCompletionHistory(task);
+			const skippedDates = this.plugin.tasksApi.getSkippedDates(task);
 
 			const cells = GraphRenderer.generateDayCells(
 				completionDates,
 				this.plugin.settings.daysBeforeToday,
 				this.plugin.settings.daysAfterToday,
-				task.recurrence
+				task.recurrence,
+				skippedDates
 			);
 
-			const streak = GraphRenderer.calculateStreak(completionDates);
+			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence);
 
 			const graphEl = GraphRenderer.renderGraph(
 				cells,
