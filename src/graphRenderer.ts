@@ -8,7 +8,7 @@ export interface DayCell {
 	isFuture: boolean;
 	completed: boolean;
 	daysFromLastCompletion: number;
-	status: 'done' | 'missed' | 'skipped' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed';
+	status: 'done' | 'missed' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed';
 }
 
 export class GraphRenderer {
@@ -44,6 +44,10 @@ export class GraphRenderer {
 		// Parse recurrence to get ideal interval (in days)
 		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
 
+		// Sort completions ascending for per-cell interval checks on past days
+		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
+		let compIdx = 0;
+
 		// Generate cells from past to future
 		for (let i = -daysBefore; i <= daysAfter; i++) {
 			const date = addDays(today, i);
@@ -54,7 +58,17 @@ export class GraphRenderer {
 			const isFuture = i > 0;
 			const completed = completionSet.has(dateStr);
 
-			// Calculate days since last completion
+			// Advance pointer to find most recent completion on or before this date
+			while (compIdx < sortedCompletions.length &&
+				sortedCompletions[compIdx].getTime() <= date.getTime()) {
+				compIdx++;
+			}
+			const lastCompBeforeCell = compIdx > 0 ? sortedCompletions[compIdx - 1] : null;
+			const daysSincePriorComp = lastCompBeforeCell
+				? Math.floor((date.getTime() - lastCompBeforeCell.getTime()) / (1000 * 60 * 60 * 24))
+				: Infinity;
+
+			// Days since overall last completion (for future scheduling window)
 			const daysSinceCompletion = Math.floor(
 				(date.getTime() - lastCompletion.getTime()) / (1000 * 60 * 60 * 24)
 			);
@@ -64,19 +78,21 @@ export class GraphRenderer {
 			if (isToday) {
 				status = completed ? 'today-done' : skippedSet.has(dateStr) ? 'skipped' : 'today-missed';
 			} else if (isFuture) {
-				// Org-mode style scheduling for future days
-				// Based on days since last completion
 				if (daysSinceCompletion < intervalDays * 0.75) {
-					status = 'future-too-early'; // Blue - not due yet
+					status = 'future-too-early';
 				} else if (daysSinceCompletion < intervalDays * 1.25) {
-					status = 'future-ok'; // Light green - good time to do it
+					status = 'future-ok';
 				} else if (daysSinceCompletion < intervalDays * 1.5) {
-					status = 'future-warning'; // Yellow - getting overdue
+					status = 'future-warning';
 				} else {
-					status = 'future-overdue'; // Red - overdue
+					status = 'future-overdue';
 				}
 			} else {
-				status = completed ? 'done' : skippedSet.has(dateStr) ? 'skipped' : 'missed';
+				// Past: respect recurrence interval — only "missed" if past the due window
+				status = completed ? 'done'
+					: skippedSet.has(dateStr) ? 'skipped'
+					: daysSincePriorComp < intervalDays ? 'rest'
+					: 'missed';
 			}
 
 			cells.push({
@@ -85,7 +101,7 @@ export class GraphRenderer {
 				isPast,
 				isFuture,
 				completed,
-				daysFromLastCompletion: daysSinceCompletion,
+				daysFromLastCompletion: daysSincePriorComp,
 				status
 			});
 		}
@@ -182,6 +198,8 @@ export class GraphRenderer {
 				case 'skipped':
 					colorClass = 'gray';
 					break;
+				case 'rest':
+					break;
 				case 'future-too-early':
 					colorClass = 'blue';
 					break;
@@ -222,7 +240,7 @@ export class GraphRenderer {
 			// Tooltip
 			const dateStr = this.dateToString(cell.date);
 			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
-			const statusText = cell.completed ? 'Done' : cell.status === 'skipped' ? 'Skipped' : (cell.isFuture ? 'Not due' : 'Missed');
+			const statusText = cell.completed ? 'Done' : cell.status === 'skipped' ? 'Skipped' : (cell.status === 'rest' || cell.isFuture) ? 'Not due' : 'Missed';
 			dayEl.setAttribute('title', `${dayName} ${dateStr}: ${statusText}`);
 		}
 
@@ -232,10 +250,15 @@ export class GraphRenderer {
 	/**
 	 * Calculate current streak
 	 */
-	static calculateStreak(completionDates: Date[], skippedDates: Date[] = []): number {
+	static calculateStreak(
+		completionDates: Date[],
+		skippedDates: Date[] = [],
+		recurrencePattern: string = 'every day'
+	): number {
 		if (completionDates.length === 0) return 0;
 
 		const today = getTodayUTC();
+		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
 
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
@@ -248,9 +271,19 @@ export class GraphRenderer {
 		let currentDate = new Date(today);
 
 		for (const completionDate of sorted) {
-			// Skip over skipped days (they don't break the streak)
-			while (skippedSet.has(formatISODate(currentDate)) && currentDate.getTime() > completionDate.getTime()) {
-				currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+			// Skip over days that don't break the streak: skipped days and rest days (within interval)
+			while (currentDate.getTime() > completionDate.getTime()) {
+				if (skippedSet.has(formatISODate(currentDate))) {
+					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+					continue;
+				}
+				// Check if this gap day is within interval from the next completion
+				const gapDays = Math.floor((currentDate.getTime() - completionDate.getTime()) / (1000 * 60 * 60 * 24));
+				if (gapDays < intervalDays) {
+					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+					continue;
+				}
+				break;
 			}
 
 			if (isSameDay(completionDate, currentDate)) {

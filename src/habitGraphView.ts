@@ -57,7 +57,7 @@ export class HabitGraphView extends ItemView {
 				skippedDates
 			);
 
-			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates);
+			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence);
 
 			const graphEl = GraphRenderer.renderGraph(
 				cells,

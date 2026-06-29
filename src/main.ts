@@ -189,7 +189,7 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 				skippedDates
 			);
 
-			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates);
+			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence);
 
 			const graphEl = GraphRenderer.renderGraph(
 				cells,
