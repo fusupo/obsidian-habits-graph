@@ -27,14 +27,8 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 		this.fileOrganizer = new FileOrganizer(this.app.vault);
 
 		// Setup vault event handlers for cache invalidation
-		this.eventHandler = new VaultEventHandler(this, this.cacheManager);
+		this.eventHandler = new VaultEventHandler(this, this.cacheManager, this.app);
 		this.eventHandler.setupEventListeners();
-
-		// Check if Tasks plugin is available
-		if (!this.tasksApi.isTasksPluginAvailable()) {
-			new Notice('⚠️ Org Habits Graph requires the Tasks plugin.\nPlease install and enable it first.', 10000);
-			// Don't return - still register the view so user can see error message
-		}
 
 		// Register the habit graph view
 		this.registerView(
@@ -142,20 +136,13 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 		this.cacheManager.clearCache();
 	}
 
-	/**
-	 * Get all tasks with caching.
-	 * Uses cache-first approach with lazy initialization.
-	 * Event handlers keep cache synchronized with file changes.
-	 */
-	async getCachedTasks() {
-		// Lazy initialization: populate cache on first call
+	async getCachedTaskNotes() {
 		if (this.cacheManager.isEmpty()) {
-			const { parseTasksFromAllFiles } = await import('./utils/taskParser');
-			const tasksByFile = await parseTasksFromAllFiles(this.app.vault);
+			const { parseTaskNotesFromAllFiles } = await import('./utils/taskParser');
+			const tasksByFile = parseTaskNotesFromAllFiles(this.app.vault, this.app.metadataCache);
 			this.cacheManager.bulkSet(tasksByFile);
 		}
 
-		// Return all cached tasks (O(1) operation after initialization)
 		return this.cacheManager.getAllCachedTasks();
 	}
 
@@ -209,20 +196,11 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 	 * Render habit graph in a code block
 	 */
 	async renderHabitGraphCodeBlock(
-		source: string,
+		_source: string,
 		el: HTMLElement,
-		ctx: MarkdownPostProcessorContext
+		_ctx: MarkdownPostProcessorContext
 	): Promise<void> {
-		// Check if Tasks plugin is available
-		if (!this.tasksApi.isTasksPluginAvailable()) {
-			const errorEl = el.createDiv({ cls: 'habit-graph-error' });
-			errorEl.createEl('h3', { text: '⚠️ Error' });
-			errorEl.createEl('p', { text: 'Tasks plugin is required but not found. Please install and enable the Tasks plugin.' });
-			return;
-		}
-
-		// Get habit tasks
-		const habitTasks = await this.tasksApi.getHabitTasks(
+		const habitTasks = await this.tasksApi.getHabitTaskNotes(
 			this.settings.habitTag
 		);
 
@@ -230,41 +208,27 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 			const emptyEl = el.createDiv({ cls: 'habit-graph-empty' });
 			emptyEl.createEl('h3', { text: 'No habits found' });
 			emptyEl.createEl('p', {
-				text: `Create recurring tasks with #${this.settings.habitTag} tag to track habits.`
+				text: `Create markdown files with frontmatter containing tags: [${this.settings.habitTag}] and a recurrence field.`
 			});
 			return;
 		}
 
-		// Group by unique habit
-		const habits = this.tasksApi.getUniqueHabits(habitTasks);
+		for (const task of habitTasks) {
+			const completionDates = this.tasksApi.getCompletionHistory(task);
 
-		// Render each habit graph
-		for (const [description, tasks] of habits) {
-			// Get the most recent task info for this habit
-			const currentTask = tasks.find(t => !t.completed) || tasks[tasks.length - 1];
-
-			// Get completion history
-			const completionDates = this.tasksApi.getCompletionHistory(
-				tasks,
-				description
-			);
-
-			// Generate day cells with recurrence pattern for scheduling window
 			const cells = GraphRenderer.generateDayCells(
 				completionDates,
 				this.settings.daysBeforeToday,
 				this.settings.daysAfterToday,
-				currentTask.recurrence
+				task.recurrence
 			);
 
-			// Calculate streak
 			const streak = GraphRenderer.calculateStreak(completionDates);
 
-			// Render graph
 			const graphEl = GraphRenderer.renderGraph(
 				cells,
-				description,
-				currentTask.recurrence,
+				task.title,
+				task.recurrence,
 				streak,
 				this.settings.showStreakCount
 			);

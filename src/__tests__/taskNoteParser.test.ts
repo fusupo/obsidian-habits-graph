@@ -64,8 +64,15 @@ describe('parseTaskNoteFromFrontmatter', () => {
 		expect(parseTaskNoteFromFrontmatter(undefined, filePath)).toBeNull();
 	});
 
-	it('returns null when title is missing', () => {
-		expect(parseTaskNoteFromFrontmatter({ status: 'open', recurrence: 'FREQ=DAILY' }, filePath)).toBeNull();
+	it('returns null when both title and recurrence are missing', () => {
+		expect(parseTaskNoteFromFrontmatter({ status: 'open' }, filePath)).toBeNull();
+	});
+
+	it('derives title from file path when title is missing but recurrence exists', () => {
+		const result = parseTaskNoteFromFrontmatter({ recurrence: 'FREQ=DAILY' }, 'tasks/morning-workout.md');
+		expect(result).not.toBeNull();
+		expect(result!.title).toBe('morning-workout');
+		expect(result!.recurrence).toBe('FREQ=DAILY');
 	});
 
 	it('coerces YAML Date objects in complete_instances to strings', () => {
