@@ -9,7 +9,8 @@ make a wrong choice without this?
 - `getCachedTaskNotes` string in tasksApi.ts must match the method name in main.ts — *why: duck-typed `typeof` check; renaming one side silently falls back to uncached parsing*
 - VaultEventHandler must use `metadataCache.on('changed')`, not `vault.on('modify')`, for frontmatter reads — *why: vault modify fires before MetadataCache parses frontmatter, giving stale data*
 - `getTodayUTC()` must use local date components (`getFullYear/Month/Date`), not UTC (`getUTCFullYear/Month/Date`) — *why: at negative UTC offsets (e.g. PDT), UTC date can be tomorrow; "today" must match the user's wall clock*
-- All `addClass()` calls in graphRenderer must guard against empty string — *why: Obsidian's `HTMLElement.addClass('')` throws; rest cells had no colorClass before blue was added*
+- graphRenderer must guard `colorClass` before `setAttribute('class', ...)` on SVG `<g>` elements — *why: empty class attributes are harmless but the guard (`if (colorClass)`) prevents meaningless DOM writes; pattern replaced addClass() in the SVG rewrite*
+- SVG elements in graphRenderer must use `document.createElementNS('http://www.w3.org/2000/svg', ...)`, not `document.createElement()` — *why: createElement produces HTML elements that render invisible inside SVG context*
 
 ## Gotchas
 
@@ -19,13 +20,14 @@ make a wrong choice without this?
 - TaskNotes plugin derives title from filename, not frontmatter — *why: parseTaskNoteFromFrontmatter must fall back to basename; requiring a `title` field causes "No habits found"*
 - Obsidian's `HTMLElement.addClass('')` throws — *why: unlike standard DOM classList.add, Obsidian's polyfill rejects empty strings; always guard with `if (value)` before calling*
 - Binary done/missed is wrong for interval habits in past days — *why: need sorted completion pointer to find most recent completion before each cell and check gap < intervalDays; without this, rest days show as red*
+- SVG graph uses percentage-based x/width on rects (no viewBox, no preserveAspectRatio) with fixed px font-size on text — *why: cells stretch to fill container while markers stay proportional; adding viewBox would distort text or prevent cell stretching*
 
 ## Glossary
 
 ## Coupling
 
 - TaskNote interface field names (src/types.ts) must match pick() key args in taskParser.ts — *why: adding or renaming a TaskNote field without updating the parser's pick() calls silently drops the value*
-- parseRecurrenceIntervalDays (recurrenceUtils.ts) is the sole bridge between recurrence patterns and scheduling window color bands in graphRenderer.ts — *why: changing interval semantics silently shifts all future-day color thresholds (lines 64-72)*
+- parseRecurrenceIntervalDays (recurrenceUtils.ts) is the sole bridge between recurrence patterns and scheduling window color bands in graphRenderer.ts — *why: changing interval semantics silently shifts all future-day color thresholds (lines 81-89)*
 - tasksApi.ts duck-types `plugin.getCachedTaskNotes` — *why: renaming in main.ts without updating the string check silently falls back to uncached `parseTaskNotesFromAllFiles`*
 - `generateDayCells` sortedCompletions pointer assumes completions sorted ascending — *why: the compIdx pointer advances forward through the array; reordering or unsorted input breaks per-cell rest-day detection*
 
