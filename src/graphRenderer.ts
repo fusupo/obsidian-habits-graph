@@ -199,6 +199,7 @@ export class GraphRenderer {
 					colorClass = 'gray';
 					break;
 				case 'rest':
+					colorClass = 'blue';
 					break;
 				case 'future-too-early':
 					colorClass = 'blue';
