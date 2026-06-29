@@ -194,7 +194,6 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 			const graphEl = GraphRenderer.renderGraph(
 				cells,
 				task.title,
-				task.recurrence,
 				streak,
 				this.settings.showStreakCount
 			);
