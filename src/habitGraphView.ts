@@ -62,7 +62,6 @@ export class HabitGraphView extends ItemView {
 			const graphEl = GraphRenderer.renderGraph(
 				cells,
 				task.title,
-				task.recurrence,
 				streak,
 				this.plugin.settings.showStreakCount
 			);

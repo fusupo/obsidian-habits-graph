@@ -1,6 +1,6 @@
 /* Org Habits Graph Styles - Org-mode inspired */
 
-/* Each habit is a row with label on left, graph on right */
+/* Each habit is a row with label on left, SVG graph on right */
 .habit-graph-row {
 	display: flex;
 	align-items: center;
@@ -20,97 +20,52 @@
 	white-space: nowrap;
 }
 
-/* Wrapper to contain scrollable graph */
-.habit-graph-wrapper {
-	flex: 1;
-	min-width: 0;
-	position: relative;
-}
-
-/* Graph: Grid of colored blocks */
-.habit-graph {
-	display: flex;
-	gap: 1px;
-}
-
-/* Mobile: make graph scrollable horizontally */
 @media (max-width: 768px) {
 	.habit-label {
-		flex: 0 0 120px; /* Narrower labels on mobile */
-	}
-
-	.habit-graph-wrapper {
-		overflow-x: auto;
-		overflow-y: hidden;
-		-webkit-overflow-scrolling: touch;
-		touch-action: pan-x;
-
-		/* Hide scrollbar on mobile but keep scroll functionality */
-		scrollbar-width: none; /* Firefox */
-		-ms-overflow-style: none; /* IE/Edge */
-	}
-
-	.habit-graph-wrapper::-webkit-scrollbar {
-		display: none; /* Chrome/Safari */
-	}
-
-	.habit-graph {
-		min-width: max-content; /* Force graph to be full width on mobile */
+		flex: 0 0 120px;
 	}
 }
 
-.habit-day {
-	width: 14px;
-	height: 18px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 10px;
-	font-weight: bold;
-	cursor: help;
-	border: 1px solid rgba(0, 0, 0, 0.1);
+/* SVG scales to fill remaining row width */
+.habit-graph-svg {
+	flex: 1;
+	min-width: 0;
+	display: block;
 }
 
-.habit-day:hover {
-	transform: scale(1.2);
-	z-index: 10;
-	box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-}
-
-/* Org-mode color scheme:
-   Blue = not due yet
+/* Org-mode color scheme applied to SVG rects:
+   Blue = not due yet / rest
    Green = could be done / was done
    Yellow = going overdue (today, not done)
    Red = overdue / missed
+   Gray = skipped
 */
-
-.habit-day.blue {
-	background-color: #7aa6da; /* Blue - not to be done yet */
-	color: white;
+.habit-graph-svg rect {
+	stroke: rgba(0, 0, 0, 0.1);
+	stroke-width: 0.5;
+	fill: transparent;
 }
 
-.habit-day.green {
-	background-color: #5cb85c; /* Green - could be/was done */
-	color: white;
-}
+.habit-graph-svg .blue rect { fill: #7aa6da; }
+.habit-graph-svg .blue text { fill: white; }
 
-.habit-day.green-light {
-	background-color: #90ee90; /* Light green - good time to do (future) */
-	color: black;
-}
+.habit-graph-svg .green rect { fill: #5cb85c; }
+.habit-graph-svg .green text { fill: white; }
 
-.habit-day.yellow {
-	background-color: #f0ad4e; /* Yellow - going overdue */
-	color: black;
-}
+.habit-graph-svg .green-light rect { fill: #90ee90; }
+.habit-graph-svg .green-light text { fill: black; }
 
-.habit-day.red {
-	background-color: #d9534f; /* Red - overdue/missed */
-	color: white;
-}
+.habit-graph-svg .yellow rect { fill: #f0ad4e; }
+.habit-graph-svg .yellow text { fill: black; }
 
-.today-indicator {
-	font-weight: bold;
+.habit-graph-svg .red rect { fill: #d9534f; }
+.habit-graph-svg .red text { fill: white; }
+
+.habit-graph-svg .gray rect { fill: #aaaaaa; }
+.habit-graph-svg .gray text { fill: white; }
+
+.habit-graph-svg text {
+	font-family: var(--font-monospace);
 }
 
 /* Error and Empty States */
@@ -151,22 +106,13 @@
 }
 
 /* Dark mode adjustments */
-.theme-dark .habit-day.blue {
-	background-color: #5f89ac;
+.theme-dark .habit-graph-svg rect {
+	stroke: rgba(255, 255, 255, 0.1);
 }
 
-.theme-dark .habit-day.green {
-	background-color: #4a934a;
-}
-
-.theme-dark .habit-day.green-light {
-	background-color: #6db36d;
-}
-
-.theme-dark .habit-day.yellow {
-	background-color: #c8883e;
-}
-
-.theme-dark .habit-day.red {
-	background-color: #b43c39;
-}
+.theme-dark .habit-graph-svg .blue rect { fill: #5f89ac; }
+.theme-dark .habit-graph-svg .green rect { fill: #4a934a; }
+.theme-dark .habit-graph-svg .green-light rect { fill: #6db36d; }
+.theme-dark .habit-graph-svg .yellow rect { fill: #c8883e; }
+.theme-dark .habit-graph-svg .red rect { fill: #b43c39; }
+.theme-dark .habit-graph-svg .gray rect { fill: #888888; }

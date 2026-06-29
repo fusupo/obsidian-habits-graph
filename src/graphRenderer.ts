@@ -109,144 +109,94 @@ export class GraphRenderer {
 		return cells;
 	}
 
-	/**
-	 * Render the graph as HTML (org-mode style)
-	 */
 	static renderGraph(
 		cells: DayCell[],
 		habitName: string,
-		recurrence: string,
 		streak: number,
 		showStreak: boolean
 	): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'habit-graph-row';
 
-		// Left side: Habit label (strip #habit tag)
 		const labelContainer = container.createDiv({ cls: 'habit-label' });
 		const cleanName = habitName.replace(/#habit/g, '').trim();
 		labelContainer.textContent = cleanName;
 
-		// Display streak count if enabled
 		if (showStreak && streak > 0) {
 			const streakEl = labelContainer.createSpan({ cls: 'habit-streak' });
 			streakEl.textContent = ` 🔥${streak}`;
 		}
 
-		// Right side: Wrapper for scrollable graph
-		const graphWrapper = container.createDiv({ cls: 'habit-graph-wrapper' });
+		const svgNS = 'http://www.w3.org/2000/svg';
+		const svg = document.createElementNS(svgNS, 'svg');
+		svg.setAttribute('class', 'habit-graph-svg');
+		svg.setAttribute('width', '100%');
+		svg.setAttribute('height', '20');
 
-		// Manual drag scrolling to override Obsidian's gesture system
-		let isDragging = false;
-		let startX = 0;
-		let startY = 0;
-		let scrollLeft = 0;
-		let isHorizontalScroll = false;
+		const cellCount = cells.length;
+		const cellWidthPct = 100 / cellCount;
 
-		graphWrapper.addEventListener('touchstart', (e) => {
-			isDragging = true;
-			startX = e.touches[0].pageX;
-			startY = e.touches[0].pageY;
-			scrollLeft = graphWrapper.scrollLeft;
-			isHorizontalScroll = false;
-		}, { passive: true });
+		for (let i = 0; i < cellCount; i++) {
+			const cell = cells[i];
 
-		graphWrapper.addEventListener('touchmove', (e) => {
-			if (!isDragging) return;
-
-			const touch = e.touches[0];
-			const deltaX = touch.pageX - startX;
-			const deltaY = touch.pageY - startY;
-
-			// Determine if this is a horizontal scroll on first move
-			if (!isHorizontalScroll && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
-				isHorizontalScroll = Math.abs(deltaX) > Math.abs(deltaY);
-			}
-
-			// If horizontal scrolling, prevent default and manually scroll
-			if (isHorizontalScroll) {
-				e.preventDefault();
-				e.stopPropagation();
-				graphWrapper.scrollLeft = scrollLeft - deltaX;
-			}
-		}, { passive: false });
-
-		graphWrapper.addEventListener('touchend', () => {
-			isDragging = false;
-			isHorizontalScroll = false;
-		}, { passive: true });
-
-		graphWrapper.addEventListener('touchcancel', () => {
-			isDragging = false;
-			isHorizontalScroll = false;
-		}, { passive: true });
-
-		const graphContainer = graphWrapper.createDiv({ cls: 'habit-graph' });
-
-		for (const cell of cells) {
-			const dayEl = graphContainer.createDiv({ cls: 'habit-day' });
-
-			// Determine color based on org-mode rules with scheduling window
 			let colorClass = '';
 			switch (cell.status) {
-				case 'done':
-					colorClass = 'green';
-					break;
-				case 'missed':
-					colorClass = 'red';
-					break;
-				case 'skipped':
-					colorClass = 'gray';
-					break;
-				case 'rest':
-					colorClass = 'blue';
-					break;
-				case 'future-too-early':
-					colorClass = 'blue';
-					break;
-				case 'future-ok':
-					colorClass = 'green-light';
-					break;
-				case 'future-warning':
-					colorClass = 'yellow';
-					break;
-				case 'future-overdue':
-					colorClass = 'red';
-					break;
-				case 'today-done':
-					colorClass = 'green';
-					break;
-				case 'today-missed':
-					colorClass = 'yellow';
-					break;
+				case 'done': colorClass = 'green'; break;
+				case 'missed': colorClass = 'red'; break;
+				case 'skipped': colorClass = 'gray'; break;
+				case 'rest': colorClass = 'blue'; break;
+				case 'future-too-early': colorClass = 'blue'; break;
+				case 'future-ok': colorClass = 'green-light'; break;
+				case 'future-warning': colorClass = 'yellow'; break;
+				case 'future-overdue': colorClass = 'red'; break;
+				case 'today-done': colorClass = 'green'; break;
+				case 'today-missed': colorClass = 'yellow'; break;
 			}
 
+			const g = document.createElementNS(svgNS, 'g');
 			if (colorClass) {
-				dayEl.addClass(colorClass);
+				g.setAttribute('class', colorClass);
 			}
 
-			// Add asterisk for completed days
-			if (cell.completed) {
-				dayEl.textContent = '*';
-			} else if (cell.status === 'skipped') {
-				dayEl.textContent = '~';
-			}
+			const rect = document.createElementNS(svgNS, 'rect');
+			rect.setAttribute('x', `${cellWidthPct * i}%`);
+			rect.setAttribute('y', '0');
+			rect.setAttribute('width', `${cellWidthPct}%`);
+			rect.setAttribute('height', '20');
+			g.appendChild(rect);
 
-			// Add exclamation mark for today
+			let marker = '';
 			if (cell.isToday) {
-				const todayMarker = dayEl.createSpan({ cls: 'today-indicator' });
-				todayMarker.textContent = cell.completed ? '*!' : '!';
-				dayEl.textContent = '';
-				dayEl.appendChild(todayMarker);
+				marker = cell.completed ? '*!' : '!';
+			} else if (cell.completed) {
+				marker = '*';
+			} else if (cell.status === 'skipped') {
+				marker = '~';
 			}
 
-			// Tooltip
+			if (marker) {
+				const text = document.createElementNS(svgNS, 'text');
+				text.setAttribute('x', `${cellWidthPct * i + cellWidthPct / 2}%`);
+				text.setAttribute('y', '10');
+				text.setAttribute('text-anchor', 'middle');
+				text.setAttribute('dominant-baseline', 'central');
+				text.setAttribute('font-size', '10');
+				text.setAttribute('font-weight', 'bold');
+				text.textContent = marker;
+				g.appendChild(text);
+			}
+
+			const title = document.createElementNS(svgNS, 'title');
 			const dateStr = this.dateToString(cell.date);
 			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
 			const statusText = cell.completed ? 'Done' : cell.status === 'skipped' ? 'Skipped' : (cell.status === 'rest' || cell.isFuture) ? 'Not due' : 'Missed';
-			dayEl.setAttribute('title', `${dayName} ${dateStr}: ${statusText}`);
+			title.textContent = `${dayName} ${dateStr}: ${statusText}`;
+			g.appendChild(title);
+
+			svg.appendChild(g);
 		}
 
+		container.appendChild(svg);
 		return container;
 	}
 
