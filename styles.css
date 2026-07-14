@@ -18,6 +18,12 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	/* Label is clickable: opens the backing TaskNote */
+	cursor: pointer;
+}
+
+.habit-label:hover {
+	text-decoration: underline;
 }
 
 @media (max-width: 768px) {
