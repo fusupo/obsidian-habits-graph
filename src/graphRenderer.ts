@@ -1,5 +1,5 @@
 import { formatISODate, getTodayUTC, isSameDay, addDays } from './utils/dateUtils';
-import { parseRecurrenceIntervalDays } from './utils/recurrenceUtils';
+import { parseRecurrenceIntervalDays, parseRecurrence, isDueOn } from './utils/recurrenceUtils';
 
 export interface DayCell {
 	date: Date;
@@ -41,8 +41,10 @@ export class GraphRenderer {
 			: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago if none
 		lastCompletion.setHours(0, 0, 0, 0);
 
-		// Parse recurrence to get ideal interval (in days)
+		// Parse recurrence to get ideal interval (in days) for the future window
 		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
+		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays)
+		const recurrence = parseRecurrence(recurrencePattern);
 
 		// Sort completions ascending for per-cell interval checks on past days
 		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
@@ -78,7 +80,12 @@ export class GraphRenderer {
 			if (isToday) {
 				status = completed ? 'today-done' : skippedSet.has(dateStr) ? 'skipped' : 'today-missed';
 			} else if (isFuture) {
-				if (daysSinceCompletion < intervalDays * 0.75) {
+				if (recurrence.kind !== 'interval') {
+					// Fixed calendar schedules: a future day is either due or not.
+					// No escalation ramp — "how overdue" has no meaning when due
+					// days don't drift with completion history.
+					status = isDueOn(recurrence, date, null) ? 'future-ok' : 'future-too-early';
+				} else if (daysSinceCompletion < intervalDays * 0.75) {
 					status = 'future-too-early';
 				} else if (daysSinceCompletion < intervalDays * 1.25) {
 					status = 'future-ok';
@@ -88,10 +95,10 @@ export class GraphRenderer {
 					status = 'future-overdue';
 				}
 			} else {
-				// Past: respect recurrence interval — only "missed" if past the due window
+				// Past: only "missed" if the habit was actually due that day
 				status = completed ? 'done'
 					: skippedSet.has(dateStr) ? 'skipped'
-					: daysSincePriorComp < intervalDays ? 'rest'
+					: !isDueOn(recurrence, date, lastCompBeforeCell) ? 'rest'
 					: 'missed';
 			}
 
@@ -211,7 +218,7 @@ export class GraphRenderer {
 		if (completionDates.length === 0) return 0;
 
 		const today = getTodayUTC();
-		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
+		const recurrence = parseRecurrence(recurrencePattern);
 
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
@@ -230,9 +237,8 @@ export class GraphRenderer {
 					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 					continue;
 				}
-				// Check if this gap day is within interval from the next completion
-				const gapDays = Math.floor((currentDate.getTime() - completionDate.getTime()) / (1000 * 60 * 60 * 24));
-				if (gapDays < intervalDays) {
+				// Gap days where the habit wasn't due don't break the streak
+				if (!isDueOn(recurrence, currentDate, completionDate)) {
 					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 					continue;
 				}

@@ -27,7 +27,8 @@ make a wrong choice without this?
 ## Coupling
 
 - TaskNote interface field names (src/types.ts) must match pick() key args in taskParser.ts — *why: adding or renaming a TaskNote field without updating the parser's pick() calls silently drops the value*
-- parseRecurrenceIntervalDays (recurrenceUtils.ts) is the sole bridge between recurrence patterns and scheduling window color bands in graphRenderer.ts — *why: changing interval semantics silently shifts all future-day color thresholds (lines 81-89)*
+- parseRecurrence/isDueOn (recurrenceUtils.ts) are the scheduling authority for graphRenderer.ts: past rest/missed, fixed-schedule future cells, and streak gap days all consult isDueOn — *why: parseRecurrenceIntervalDays is now only a display/legacy heuristic that still drives the interval-kind future escalation ramp (0.75x/1.25x/1.5x); changing one bridge without the other silently diverges rendering*
+- isDueOn's 'interval' branch must reproduce the legacy rolling-window math (gap >= days, due when no prior completion) — *why: generateDayCells and calculateStreak assume exact behavioral equivalence for plain-interval habits; the regression suite in graphRenderer.test.ts was verified against the pre-#11 implementation*
 - tasksApi.ts duck-types `plugin.getCachedTaskNotes` — *why: renaming in main.ts without updating the string check silently falls back to uncached `parseTaskNotesFromAllFiles`*
 - `generateDayCells` sortedCompletions pointer assumes completions sorted ascending — *why: the compIdx pointer advances forward through the array; reordering or unsorted input breaks per-cell rest-day detection*
 
