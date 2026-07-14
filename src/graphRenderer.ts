@@ -218,7 +218,7 @@ export class GraphRenderer {
 		if (completionDates.length === 0) return 0;
 
 		const today = getTodayUTC();
-		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
+		const recurrence = parseRecurrence(recurrencePattern);
 
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
@@ -237,9 +237,8 @@ export class GraphRenderer {
 					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 					continue;
 				}
-				// Check if this gap day is within interval from the next completion
-				const gapDays = Math.floor((currentDate.getTime() - completionDate.getTime()) / (1000 * 60 * 60 * 24));
-				if (gapDays < intervalDays) {
+				// Gap days where the habit wasn't due don't break the streak
+				if (!isDueOn(recurrence, currentDate, completionDate)) {
 					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 					continue;
 				}

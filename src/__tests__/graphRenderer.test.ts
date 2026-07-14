@@ -219,3 +219,48 @@ describe('calculateStreak — interval kind (regression: legacy behavior)', () =
 		expect(GraphRenderer.calculateStreak(completions, [], 'FREQ=DAILY;INTERVAL=3')).toBe(3);
 	});
 });
+
+describe('calculateStreak — weekly-bydays (#11)', () => {
+	// Today is Wed 2025-01-15
+	const MWF = 'FREQ=WEEKLY;BYDAY=MO,WE,FR';
+
+	it('non-due days (Tue/Thu/weekends) do not break the streak', () => {
+		const completions = ['2025-01-08', '2025-01-10', '2025-01-13', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], MWF)).toBe(4);
+	});
+
+	it('three unbroken Mon/Wed/Fri weeks count 9', () => {
+		const completions = [
+			'2024-12-27', '2024-12-30',
+			'2025-01-01', '2025-01-03', '2025-01-06', '2025-01-08',
+			'2025-01-10', '2025-01-13', '2025-01-15',
+		].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], MWF)).toBe(9);
+	});
+
+	it('a missed due day breaks the streak', () => {
+		// Monday 13th missed; Wed 15 completed
+		const completions = ['2025-01-08', '2025-01-10', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], MWF)).toBe(1);
+	});
+
+	it('a skipped due day preserves the streak', () => {
+		const completions = ['2025-01-08', '2025-01-10', '2025-01-15'].map(parseISODate);
+		const skipped = [parseISODate('2025-01-13')]; // Mon marked skipped
+		expect(GraphRenderer.calculateStreak(completions, skipped, MWF)).toBe(3);
+	});
+});
+
+describe('calculateStreak — monthly-bymonthday (#11)', () => {
+	it('intervening non-due days do not break a monthly streak', () => {
+		// due on the 1st and 15th; today Wed 2025-01-15
+		const completions = ['2024-12-15', '2025-01-01', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], 'FREQ=MONTHLY;BYMONTHDAY=1,15')).toBe(3);
+	});
+
+	it('a missed due monthday breaks the streak', () => {
+		// Jan 1 missed
+		const completions = ['2024-12-15', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], 'FREQ=MONTHLY;BYMONTHDAY=1,15')).toBe(1);
+	});
+});
