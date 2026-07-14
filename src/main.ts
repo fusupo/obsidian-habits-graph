@@ -5,6 +5,7 @@ import { HabitGraphView, VIEW_TYPE_HABIT_GRAPH } from './habitGraphView';
 import { GraphRenderer } from './graphRenderer';
 import { TaskCacheManager } from './cache/TaskCacheManager';
 import { VaultEventHandler } from './events/VaultEventHandler';
+import { openTaskNote } from './utils/noteOpener';
 
 export default class OrgHabitsGraphPlugin extends Plugin {
 	settings: HabitGraphSettings;
@@ -195,7 +196,8 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 				cells,
 				task.title,
 				streak,
-				this.settings.showStreakCount
+				this.settings.showStreakCount,
+				() => openTaskNote(this.app, task.path)
 			);
 
 			el.appendChild(graphEl);

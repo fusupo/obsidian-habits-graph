@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type OrgHabitsGraphPlugin from './main';
 import { GraphRenderer } from './graphRenderer';
+import { openTaskNote } from './utils/noteOpener';
 
 export const VIEW_TYPE_HABIT_GRAPH = 'habit-graph-view';
 
@@ -63,7 +64,8 @@ export class HabitGraphView extends ItemView {
 				cells,
 				task.title,
 				streak,
-				this.plugin.settings.showStreakCount
+				this.plugin.settings.showStreakCount,
+				() => openTaskNote(this.app, task.path)
 			);
 
 			container.appendChild(graphEl);
