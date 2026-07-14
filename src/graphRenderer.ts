@@ -120,7 +120,8 @@ export class GraphRenderer {
 		cells: DayCell[],
 		habitName: string,
 		streak: number,
-		showStreak: boolean
+		showStreak: boolean,
+		onLabelClick?: () => void
 	): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'habit-graph-row';
@@ -128,6 +129,12 @@ export class GraphRenderer {
 		const labelContainer = container.createDiv({ cls: 'habit-label' });
 		const cleanName = habitName.replace(/#habit/g, '').trim();
 		labelContainer.textContent = cleanName;
+
+		if (onLabelClick) {
+			// Plain listener is safe: the element is discarded on every
+			// re-render, never reused, so no registerDomEvent cleanup needed
+			labelContainer.addEventListener('click', onLabelClick);
+		}
 
 		if (showStreak && streak > 0) {
 			const streakEl = labelContainer.createSpan({ cls: 'habit-streak' });
