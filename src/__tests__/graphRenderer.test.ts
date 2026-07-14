@@ -137,6 +137,41 @@ describe('generateDayCells — weekly-bydays past days (#11)', () => {
 	});
 });
 
+describe('generateDayCells — fixed-schedule future days (#11)', () => {
+	// Today is Wed 2025-01-15. Future week: 16=Thu 17=Fri 18=Sat 19=Sun 20=Mon 21=Tue 22=Wed
+	const MWF = 'FREQ=WEEKLY;BYDAY=MO,WE,FR';
+
+	it('future due weekdays are future-ok; others future-too-early (no escalation ramp)', () => {
+		// No completions in ages — the legacy ramp would have shown Sat/Sun as overdue
+		const cells = GraphRenderer.generateDayCells([], 0, 7, MWF);
+
+		expect(statusOf(cells, '2025-01-16')).toBe('future-too-early'); // Thu
+		expect(statusOf(cells, '2025-01-17')).toBe('future-ok');        // Fri
+		expect(statusOf(cells, '2025-01-18')).toBe('future-too-early'); // Sat
+		expect(statusOf(cells, '2025-01-19')).toBe('future-too-early'); // Sun
+		expect(statusOf(cells, '2025-01-20')).toBe('future-ok');        // Mon
+		expect(statusOf(cells, '2025-01-21')).toBe('future-too-early'); // Tue
+		expect(statusOf(cells, '2025-01-22')).toBe('future-ok');        // Wed
+	});
+
+	it('future classification is independent of completion history', () => {
+		const completions = ['2025-01-13', '2025-01-15'].map(parseISODate);
+		const cells = GraphRenderer.generateDayCells(completions, 0, 7, MWF);
+
+		expect(statusOf(cells, '2025-01-17')).toBe('future-ok');        // Fri
+		expect(statusOf(cells, '2025-01-18')).toBe('future-too-early'); // Sat
+	});
+
+	it('monthly-bymonthday: only the scheduled day of month is future-ok', () => {
+		// today Jan 15, look 17 days ahead to cover Feb 1
+		const cells = GraphRenderer.generateDayCells([], 0, 17, 'FREQ=MONTHLY;BYMONTHDAY=1');
+
+		expect(statusOf(cells, '2025-01-16')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-01-31')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-02-01')).toBe('future-ok');
+	});
+});
+
 describe('generateDayCells — monthly-bymonthday past days (#11)', () => {
 	const FIRST = 'FREQ=MONTHLY;BYMONTHDAY=1';
 
