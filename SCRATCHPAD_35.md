@@ -68,19 +68,19 @@ The future ramp already encodes this escalation (`future-ok` → `future-warning
   - Tests: `today-overdue` + isToday → `'red-bright'` with no `today` suffix; base-mapping sanity check alongside the existing per-status table.
   - Why: user directive — the escalation is a today-only signal that must out-shout the ordinary red history behind it; keeps both calls to action full strength per the #33 invariant's intent.
 
-- [ ] **Task 3: "Overdue" tooltip label in `renderGraph`**
+- [x] **Task 3: "Overdue" tooltip label in `renderGraph`**
   - Files affected: src/graphRenderer.ts
   - Extend the `statusText` ternary with `cell.status === 'today-overdue' ? 'Overdue'` before the generic `'Missed'` fallback.
   - No tests: renderGraph is DOM-building and untested (node jest env, no jsdom); verified by tsc only. Staying in scope.
   - Why: issue specifies the tooltip text.
 
-- [ ] **Task 4: Regression test — `calculateStreak` unaffected**
+- [x] **Task 4: Regression test — `calculateStreak` unaffected**
   - Files affected: src/__tests__/graphRenderer.test.ts only
   - `calculateStreak` never reads `DayCell.status` (confirmed by construction), but the issue asks to verify. Add a rolling-window overdue scenario (e.g. FREQ=DAILY;INTERVAL=3, last completion 4+ days ago, today undone) asserting the pre-#35 streak value.
   - May fold into Task 1's commit if preferred.
   - Why: acceptance criterion "Streak calculation unchanged".
 
-- [ ] **Task 5: Documentation — PROJECT_LORE.md + README.md legend**
+- [x] **Task 5: Documentation — PROJECT_LORE.md + README.md legend**
   - Files affected: PROJECT_LORE.md, README.md
   - New lore invariant documenting the carve-out: today's "missed variant" slot escalates to `today-overdue` for rolling-window habits (gap > interval, prior completion required — never-completed stays yellow despite Infinity gap); an escalation WITHIN the #28 precedence chain, not a new level; fixed-schedule/scheduled-anchor untouched.
   - Update the #33 tint-exemption lore entry: excludes the call-to-action statuses (`today-missed`, `today-overdue`), no longer "only that".
@@ -88,10 +88,10 @@ The future ramp already encodes this escalation (`future-ok` → `future-warning
   - Why: the setup prompt explicitly requires documenting the #28 divergence rather than silently breaking the invariant; README/lore sync is project precedent (49fd82d).
 
 ### Quality Checks
-- [ ] `npx tsc --noEmit -skipLibCheck` (sequential, never concurrent with jest)
-- [ ] `npx jest --runInBand` (NEVER parallel)
-- [ ] Self-review for code quality
-- [ ] Verify acceptance criteria met (visual check in live vault after `npm run build`)
+- [x] `npx tsc --noEmit -skipLibCheck` (sequential, never concurrent with jest)
+- [x] `npx jest --runInBand` (NEVER parallel) — 195 passing
+- [x] Self-review for code quality
+- [x] Verify acceptance criteria met (visual check in live vault — user approved the striped design)
 
 ### Documentation
 - [ ] PROJECT_LORE.md + README.md updates (Task 5)
@@ -140,6 +140,19 @@ Escalate within the existing "missed variant" slot, gated on (rolling-window kin
   - Notes: TS definite-assignment forced the `case 'today-overdue': base = 'red-bright'` line into Task 1 (switch must stay exhaustive to compile); tint exemption/CSS/tests remain Task 2. Also fixed the stale "vertical accent line" comment in the today branch (leftover from #33's early design). Extracted `isRollingWindowInterval` and refactored the future branch to use it (pure refactor, #11/#27 suites green). 10 new tests incl. today-only escalation (past over-gap days stay plain 'missed') and precedence (done/skipped beat overdue). 192 tests passing.
 - Completed: Task 2 (red-bright color + tint exemption)
   - Notes: tint exemption now the call-to-action set (today-missed, today-overdue); .red-bright fills #ff2d20 light / #ff453a dark (vivid vs the muted .red #d9534f/#b43c39 — subject to visual iteration); styles.css committed via the hunk-only blob technique (user's .habit-label edit excluded). 194 tests passing.
+- Completed: Task 3 (Overdue tooltip), Task 4 (calculateStreak regression lock: overdue → streak 0 as pre-#35, within-interval control holds at 3; 195 tests), Task 5 (lore invariant for the carve-out, #28 coupling cross-ref, #33 exemption entry now names both calls to action, README legend).
+
+### 2026-07-15 - Session Complete
+- All implementation tasks complete; commits 4daa3e1, 6151440, 65e8b58, 5663329, c5e30e7
+- Quality checks: passed (195 tests --runInBand, tsc clean, production build done)
+- Visual check pending: `TEST overdue today.md` created in vault (daily, last completed 2 days ago → today-overdue); bright-red shade open to iteration
+- Ready for PR: pending visual sign-off
+
+### 2026-07-15 - Post-screenshot pivots
+- Flat bright red was indistinct among red history → red/white 45° diagonal stripes via SVG <pattern> (780ab1e), user's suggestion; per-svg pattern copy under a shared id, stripe colors as CSS classes, bright red kept as fill fallback.
+- "clean kitchen" (never completed, scheduled 16 days back, interval 14) stayed yellow → overdue gap now anchors to the scheduled date when no completion exists (1147471); brand-new habits with neither anchor still yellow. Lore invariant updated. 197 tests.
+- User approved the striped design ("looks pretty good").
+- Ready for PR: yes
 
 ---
 **Generated:** 2026-07-15
