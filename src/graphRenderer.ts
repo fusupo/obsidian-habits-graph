@@ -92,14 +92,18 @@ export class GraphRenderer {
 				// tint colorClassForCell applies from cell.isToday.
 				// The final "missed variant" slot escalates for rolling-window
 				// habits already past their interval: the due day has come and
-				// gone, so today is overdue, not merely due. Requires a prior
-				// completion — a never-completed habit (infinite gap) is
+				// gone, so today is overdue, not merely due. Needs an anchor to
+				// be overdue FROM — the last completion, or the scheduled date
+				// if never completed. A brand-new habit with neither is
 				// day-one-due, with nothing yet to be overdue from.
+				const overdueGap = lastCompBeforeCell !== null ? daysSincePriorComp
+					: scheduledDate ? Math.floor((date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+					: null;
 				status = completed ? 'today-done'
 					: skippedSet.has(dateStr) ? 'skipped'
 					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
-					: (isRollingWindowInterval && lastCompBeforeCell !== null &&
-						daysSincePriorComp > intervalDays) ? 'today-overdue'
+					: (isRollingWindowInterval && overdueGap !== null &&
+						overdueGap > intervalDays) ? 'today-overdue'
 					: 'today-missed';
 			} else if (isFuture) {
 				if (!isRollingWindowInterval) {

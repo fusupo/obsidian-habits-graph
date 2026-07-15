@@ -66,9 +66,9 @@ describe('generateDayCells — interval kind (regression: legacy rolling-window 
 		const done = GraphRenderer.generateDayCells([parseISODate('2025-01-15')], 1, 1, 'FREQ=DAILY');
 		expect(statusOf(done, '2025-01-15')).toBe('today-done');
 
-		// Load-bearing for #35: never completed → gap is Infinity, but with no
-		// prior completion there is nothing to be overdue FROM — day-one-due
-		// stays yellow, never today-overdue.
+		// Load-bearing for #35: never completed and no scheduled date → no
+		// anchor to be overdue FROM — day-one-due stays yellow, never
+		// today-overdue.
 		const missed = GraphRenderer.generateDayCells([], 1, 1, 'FREQ=DAILY');
 		expect(statusOf(missed, '2025-01-15')).toBe('today-missed');
 	});
@@ -361,9 +361,32 @@ describe('generateDayCells — today-overdue for rolling-window habits (#35)', (
 		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
 	});
 
-	it('never-completed rolling-window habit stays today-missed despite infinite gap', () => {
+	it('never-completed rolling-window habit with no scheduled date stays today-missed', () => {
+		// No completion and no scheduled date: no anchor to be overdue from.
 		const cells = GraphRenderer.generateDayCells([], 5, 1, EVERY3);
 		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('never-completed completion-anchor habit falls back to the scheduled date for the gap', () => {
+		// Scheduled 4 days ago, never completed: overdue from the scheduled
+		// date once past the interval.
+		const scheduled = parseISODate('2025-01-11'); // gap 4 > 3
+		const overdue = GraphRenderer.generateDayCells([], 5, 1, EVERY3, [], 'completion', scheduled);
+		expect(statusOf(overdue, '2025-01-15')).toBe('today-overdue');
+
+		// Scheduled within the interval: due, but not yet overdue.
+		const recent = parseISODate('2025-01-13'); // gap 2 < 3
+		const due = GraphRenderer.generateDayCells([], 5, 1, EVERY3, [], 'completion', recent);
+		expect(statusOf(due, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('a completion overrides the scheduled-date fallback as the overdue anchor', () => {
+		// Scheduled long ago but completed recently: the completion is the
+		// anchor, and today is inside the window — rest, not overdue.
+		const scheduled = parseISODate('2025-01-01');
+		const completions = [parseISODate('2025-01-14')]; // gap 1 < 3
+		const cells = GraphRenderer.generateDayCells(completions, 5, 1, EVERY3, [], 'completion', scheduled);
+		expect(statusOf(cells, '2025-01-15')).toBe('rest');
 	});
 
 	it('fixed-schedule habit due today stays today-missed regardless of gap', () => {
