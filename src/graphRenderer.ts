@@ -82,8 +82,8 @@ export class GraphRenderer {
 
 			if (isToday) {
 				// Same precedence as the past branch: a non-due today is a rest
-				// day, not "missed". The `!` today marker survives — it keys off
-				// cell.isToday, not status.
+				// day, not "missed". Today stays findable via the vertical
+				// accent line renderGraph draws from cell.isToday.
 				status = completed ? 'today-done'
 					: skippedSet.has(dateStr) ? 'skipped'
 					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
@@ -127,6 +127,40 @@ export class GraphRenderer {
 		return cells;
 	}
 
+	/**
+	 * Marker glyph for a cell — uniform across all days, including today.
+	 * Today is indicated by its tinted cell color, not a glyph.
+	 */
+	static markerForCell(cell: DayCell): '' | '*' | '~' {
+		return cell.completed ? '*' : cell.status === 'skipped' ? '~' : '';
+	}
+
+	/**
+	 * Color class(es) for a cell — status-driven; today additionally gets
+	 * the 'today' modifier, which tints the normal status color in place
+	 * (a baked-in overlay, see styles.css) so the current day stays
+	 * findable. EXCEPT yellow (today-missed): a due-but-undone today is
+	 * the graph's call to action and keeps its full-strength color.
+	 */
+	static colorClassForCell(cell: DayCell): string {
+		let base: string;
+		switch (cell.status) {
+			case 'done': base = 'green'; break;
+			case 'missed': base = 'red'; break;
+			case 'skipped': base = 'gray'; break;
+			case 'rest': base = 'blue'; break;
+			case 'future-too-early': base = 'blue'; break;
+			case 'future-ok': base = 'green-light'; break;
+			case 'future-warning': base = 'yellow'; break;
+			case 'future-overdue': base = 'red'; break;
+			case 'today-done': base = 'green'; break;
+			case 'today-missed': base = 'yellow'; break;
+		}
+		return cell.isToday && cell.status !== 'today-missed'
+			? `${base} today`
+			: base;
+	}
+
 	static renderGraph(
 		cells: DayCell[],
 		habitName: string,
@@ -164,19 +198,7 @@ export class GraphRenderer {
 		for (let i = 0; i < cellCount; i++) {
 			const cell = cells[i];
 
-			let colorClass = '';
-			switch (cell.status) {
-				case 'done': colorClass = 'green'; break;
-				case 'missed': colorClass = 'red'; break;
-				case 'skipped': colorClass = 'gray'; break;
-				case 'rest': colorClass = 'blue'; break;
-				case 'future-too-early': colorClass = 'blue'; break;
-				case 'future-ok': colorClass = 'green-light'; break;
-				case 'future-warning': colorClass = 'yellow'; break;
-				case 'future-overdue': colorClass = 'red'; break;
-				case 'today-done': colorClass = 'green'; break;
-				case 'today-missed': colorClass = 'yellow'; break;
-			}
+			const colorClass = this.colorClassForCell(cell);
 
 			const g = document.createElementNS(svgNS, 'g');
 			if (colorClass) {
@@ -190,14 +212,7 @@ export class GraphRenderer {
 			rect.setAttribute('height', '20');
 			g.appendChild(rect);
 
-			let marker = '';
-			if (cell.isToday) {
-				marker = cell.completed ? '*!' : '!';
-			} else if (cell.completed) {
-				marker = '*';
-			} else if (cell.status === 'skipped') {
-				marker = '~';
-			}
+			const marker = this.markerForCell(cell);
 
 			if (marker) {
 				const text = document.createElementNS(svgNS, 'text');

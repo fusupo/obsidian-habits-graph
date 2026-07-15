@@ -66,7 +66,7 @@ Morning workout                      Daily 🔥 12
 
 - **█ (Green)** - Task completed on this day
 - **░ (Red)** - Task missed on this day
-- **! (Border)** - Today's indicator
+- **Tinted cell** - Today (its normal color darkened/brightened in place; a due-but-not-done today stays full-strength yellow)
 - **Gray** - Future days (not yet due)
 - **🔥 12** - Current streak (12 days in a row)
 - **85% (18/21)** - Completion rate over the graph window

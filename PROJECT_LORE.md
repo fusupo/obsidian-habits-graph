@@ -12,6 +12,7 @@ make a wrong choice without this?
 - graphRenderer must guard `colorClass` before `setAttribute('class', ...)` on SVG `<g>` elements — *why: empty class attributes are harmless but the guard (`if (colorClass)`) prevents meaningless DOM writes; pattern replaced addClass() in the SVG rewrite*
 - SVG elements in graphRenderer must use `document.createElementNS('http://www.w3.org/2000/svg', ...)`, not `document.createElement()` — *why: createElement produces HTML elements that render invisible inside SVG context*
 - isDueOn's scheduled-anchor interval branch must SILENTLY fall back to rolling-window completion math when scheduledDate is null — *why: 'scheduled' is the frontmatter default and most habits set no scheduled date; this fallback is what keeps pre-#27 default behavior unchanged. Do not add a console.warn here (it's the common case) and do not "fix" it to throw*
+- colorClassForCell's `today` tint modifier must exclude `'today-missed'` (yellow) and only that, and 'today' is always appended to a base color class, never standalone — *why: yellow is the call-to-action and only ever appears on today, so tinting/replacing it destroys the graph's main signal (learned across five rejected today-indicator designs in #33: center line, halo, tint overlay, frame, flat purple); the tint is a CSS brightness filter on the base color, so a bare 'today' class renders an untinted transparent rect*
 
 ## Gotchas
 
@@ -21,7 +22,7 @@ make a wrong choice without this?
 - TaskNotes plugin derives title from filename, not frontmatter — *why: parseTaskNoteFromFrontmatter must fall back to basename; requiring a `title` field causes "No habits found"*
 - Obsidian's `HTMLElement.addClass('')` throws — *why: unlike standard DOM classList.add, Obsidian's polyfill rejects empty strings; always guard with `if (value)` before calling*
 - Binary done/missed is wrong for interval habits in past days — *why: need sorted completion pointer to find most recent completion before each cell and check gap < intervalDays; without this, rest days show as red*
-- The `!`/`*!` today marker in renderGraph is driven by `cell.isToday`/`cell.completed`, NOT `cell.status` — *why: a non-due today reuses the plain 'rest' status (since #28) and still gets its marker; do not assume marker and status are coupled, and do not invent a 'today-rest' status to "keep the marker"*
+- Marker glyphs (markerForCell) are uniformly completed/status-driven (`*`/`~`/none) with NO today special-case; today is indicated by colorClassForCell's 'today' brightness-tint modifier instead (since #33) — *why: isToday looks dead if you only grep markers; do not reintroduce a `!` glyph or a 'today-rest' status, and a non-due today still reuses plain 'rest' (since #28)*
 - SVG graph uses percentage-based x/width on rects (no viewBox, no preserveAspectRatio) with fixed px font-size on text — *why: cells stretch to fill container while markers stay proportional; adding viewBox would distort text or prevent cell stretching*
 
 ## Glossary
