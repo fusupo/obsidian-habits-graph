@@ -43,6 +43,29 @@ export function parseISODate(dateStr: string): Date {
 }
 
 /**
+ * Best-effort parse of a frontmatter date value to a UTC-midnight Date.
+ *
+ * Frontmatter is user-typed: values may be bare dates, datetime strings
+ * ("2025-01-15T09:00" from time-blocked TaskNotes), or garbage. This accepts
+ * anything with a leading YYYY-MM-DD (time portion discarded) and returns
+ * null instead of throwing on everything else, so a malformed `scheduled`
+ * value can never break rendering.
+ *
+ * @param dateStr - Raw frontmatter value, or undefined
+ * @returns Date at midnight UTC, or null if no valid leading date
+ */
+export function parseISODateOrNull(dateStr: string | undefined): Date | null {
+	if (!dateStr) return null;
+	const match = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+	if (!match) return null;
+	try {
+		return parseISODate(match[1]);
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Format a Date object as an ISO date string (YYYY-MM-DD) in UTC.
  *
  * Replaces the fragile `.toISOString().split('T')[0]` pattern with
