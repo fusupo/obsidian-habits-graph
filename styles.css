@@ -70,14 +70,15 @@
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
 
-/* Vertical line marking today's cell; stacked rows read as one continuous
-   line. --text-normal flips near-white/near-black with the theme; partial
-   opacity softens it from a hard rule into a spine that stays legible on
-   every cell color without overpowering them. */
-.habit-graph-svg .today-line {
-	stroke: var(--text-normal);
-	stroke-width: 2;
-	stroke-opacity: 0.5;
+/* Today's column: a translucent strip over today's cell; stacked rows read
+   as one continuous band. --text-normal is near-black in light theme and
+   near-white in dark, so the strip darkens or lightens the cell without
+   changing its hue. The rect lives OUTSIDE the color <g> (see renderGraph)
+   so the .blue/.green/... rect rules can't override the fill. */
+.habit-graph-svg .today-overlay {
+	fill: var(--text-normal);
+	fill-opacity: 0.25;
+	stroke: none;
 }
 
 .habit-graph-svg text {

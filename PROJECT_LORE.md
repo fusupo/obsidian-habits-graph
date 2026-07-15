@@ -12,7 +12,7 @@ make a wrong choice without this?
 - graphRenderer must guard `colorClass` before `setAttribute('class', ...)` on SVG `<g>` elements — *why: empty class attributes are harmless but the guard (`if (colorClass)`) prevents meaningless DOM writes; pattern replaced addClass() in the SVG rewrite*
 - SVG elements in graphRenderer must use `document.createElementNS('http://www.w3.org/2000/svg', ...)`, not `document.createElement()` — *why: createElement produces HTML elements that render invisible inside SVG context*
 - isDueOn's scheduled-anchor interval branch must SILENTLY fall back to rolling-window completion math when scheduledDate is null — *why: 'scheduled' is the frontmatter default and most habits set no scheduled date; this fallback is what keeps pre-#27 default behavior unchanged. Do not add a console.warn here (it's the common case) and do not "fix" it to throw*
-- The today `<line>` in renderGraph must be appended inside today's `<g>` AFTER the `rect` and BEFORE the marker `<text>` — *why: SVG paints in document order; reordering hides the `*`/`~` glyph under the line on today's cell*
+- The today-overlay `<rect>` in renderGraph must be appended to the SVG root as a sibling AFTER today's `<g>`, never inside it — *why: the per-color rules (`.habit-graph-svg .blue rect` + `.theme-dark` variants) target every rect inside a color group and out-specify `.today-overlay`, silently making the tint invisible; the overlay is translucent so painting above the glyph is intended*
 
 ## Gotchas
 

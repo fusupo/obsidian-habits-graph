@@ -198,20 +198,6 @@ export class GraphRenderer {
 			rect.setAttribute('height', '20');
 			g.appendChild(rect);
 
-			if (cell.isToday) {
-				// Must sit between the rect and the marker <text>: the line
-				// paints over the cell background but under the glyph, so
-				// */~ stay legible on today's cell.
-				const line = document.createElementNS(svgNS, 'line');
-				line.setAttribute('class', 'today-line');
-				const centerX = `${cellWidthPct * i + cellWidthPct / 2}%`;
-				line.setAttribute('x1', centerX);
-				line.setAttribute('x2', centerX);
-				line.setAttribute('y1', '0');
-				line.setAttribute('y2', '20');
-				g.appendChild(line);
-			}
-
 			const marker = this.markerForCell(cell);
 
 			if (marker) {
@@ -234,6 +220,20 @@ export class GraphRenderer {
 			g.appendChild(title);
 
 			svg.appendChild(g);
+
+			if (cell.isToday) {
+				// Sibling AFTER the <g>, never inside it: the per-color rules
+				// (.habit-graph-svg .blue rect, incl. .theme-dark variants)
+				// target every rect inside the color group and would override
+				// the tint fill. Translucent, so the */~ glyph reads through.
+				const overlay = document.createElementNS(svgNS, 'rect');
+				overlay.setAttribute('class', 'today-overlay');
+				overlay.setAttribute('x', `${cellWidthPct * i}%`);
+				overlay.setAttribute('y', '0');
+				overlay.setAttribute('width', `${cellWidthPct}%`);
+				overlay.setAttribute('height', '20');
+				svg.appendChild(overlay);
+			}
 		}
 
 		container.appendChild(svg);
