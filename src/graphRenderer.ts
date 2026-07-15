@@ -129,10 +129,35 @@ export class GraphRenderer {
 
 	/**
 	 * Marker glyph for a cell — uniform across all days, including today.
-	 * Today is indicated by the vertical accent line, not a glyph.
+	 * Today is indicated by its dedicated cell color, not a glyph.
 	 */
 	static markerForCell(cell: DayCell): '' | '*' | '~' {
 		return cell.completed ? '*' : cell.status === 'skipped' ? '~' : '';
+	}
+
+	/**
+	 * Color class for a cell — status-driven, except that any today cell
+	 * NOT rendering yellow (today-missed) gets the dedicated 'today'
+	 * color so the current day stays findable. Yellow always wins: a
+	 * due-but-undone today is the graph's call to action. Completed and
+	 * skipped state still read from the * / ~ glyphs on the today cell.
+	 */
+	static colorClassForCell(cell: DayCell): string {
+		if (cell.isToday && cell.status !== 'today-missed') {
+			return 'today';
+		}
+		switch (cell.status) {
+			case 'done': return 'green';
+			case 'missed': return 'red';
+			case 'skipped': return 'gray';
+			case 'rest': return 'blue';
+			case 'future-too-early': return 'blue';
+			case 'future-ok': return 'green-light';
+			case 'future-warning': return 'yellow';
+			case 'future-overdue': return 'red';
+			case 'today-done': return 'green';
+			case 'today-missed': return 'yellow';
+		}
 	}
 
 	static renderGraph(
@@ -172,19 +197,7 @@ export class GraphRenderer {
 		for (let i = 0; i < cellCount; i++) {
 			const cell = cells[i];
 
-			let colorClass = '';
-			switch (cell.status) {
-				case 'done': colorClass = 'green'; break;
-				case 'missed': colorClass = 'red'; break;
-				case 'skipped': colorClass = 'gray'; break;
-				case 'rest': colorClass = 'blue'; break;
-				case 'future-too-early': colorClass = 'blue'; break;
-				case 'future-ok': colorClass = 'green-light'; break;
-				case 'future-warning': colorClass = 'yellow'; break;
-				case 'future-overdue': colorClass = 'red'; break;
-				case 'today-done': colorClass = 'green'; break;
-				case 'today-missed': colorClass = 'yellow'; break;
-			}
+			const colorClass = this.colorClassForCell(cell);
 
 			const g = document.createElementNS(svgNS, 'g');
 			if (colorClass) {
@@ -220,20 +233,6 @@ export class GraphRenderer {
 			g.appendChild(title);
 
 			svg.appendChild(g);
-
-			if (cell.isToday) {
-				// Sibling AFTER the <g>, never inside it: the per-color rules
-				// (.habit-graph-svg .blue rect, incl. .theme-dark variants)
-				// target every rect inside the color group and would override
-				// the tint fill. Translucent, so the */~ glyph reads through.
-				const overlay = document.createElementNS(svgNS, 'rect');
-				overlay.setAttribute('class', 'today-overlay');
-				overlay.setAttribute('x', `${cellWidthPct * i}%`);
-				overlay.setAttribute('y', '0');
-				overlay.setAttribute('width', `${cellWidthPct}%`);
-				overlay.setAttribute('height', '20');
-				svg.appendChild(overlay);
-			}
 		}
 
 		container.appendChild(svg);

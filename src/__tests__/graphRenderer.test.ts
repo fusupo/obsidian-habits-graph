@@ -501,3 +501,49 @@ describe('markerForCell — uniform glyphs, no today special-case (#33)', () => 
 		expect(GraphRenderer.markerForCell(makeCell({ isFuture: true, status: 'future-ok' }))).toBe('');
 	});
 });
+
+describe('colorClassForCell — dedicated today color, yellow always wins (#33)', () => {
+	function makeCell(overrides: Partial<DayCell>): DayCell {
+		return {
+			date: parseISODate('2025-01-15'),
+			isToday: false,
+			isPast: false,
+			isFuture: false,
+			completed: false,
+			daysFromLastCompletion: 0,
+			status: 'missed',
+			...overrides,
+		};
+	}
+
+	it('due-but-undone today stays yellow (call to action wins over today color)', () => {
+		const cell = makeCell({ isToday: true, status: 'today-missed' });
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('yellow');
+	});
+
+	it('non-due today (rest) renders the today color, not blue', () => {
+		const cell = makeCell({ isToday: true, status: 'rest' });
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('today');
+	});
+
+	it('completed today renders the today color (the * glyph carries done-ness)', () => {
+		const cell = makeCell({ isToday: true, completed: true, status: 'today-done' });
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('today');
+	});
+
+	it('skipped today renders the today color (the ~ glyph carries skipped-ness)', () => {
+		const cell = makeCell({ isToday: true, status: 'skipped' });
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('today');
+	});
+
+	it('non-today cells keep their status-driven colors', () => {
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'done' }))).toBe('green');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'missed' }))).toBe('red');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'rest' }))).toBe('blue');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'skipped' }))).toBe('gray');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-ok' }))).toBe('green-light');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-too-early' }))).toBe('blue');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-warning' }))).toBe('yellow');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-overdue' }))).toBe('red');
+	});
+});

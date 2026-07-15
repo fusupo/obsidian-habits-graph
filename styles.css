@@ -70,16 +70,12 @@
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
 
-/* Today's column: a translucent strip over today's cell; stacked rows read
-   as one continuous band. --text-normal is near-black in light theme and
-   near-white in dark, so the strip darkens or lightens the cell without
-   changing its hue. The rect lives OUTSIDE the color <g> (see renderGraph)
-   so the .blue/.green/... rect rules can't override the fill. */
-.habit-graph-svg .today-overlay {
-	fill: var(--text-normal);
-	fill-opacity: 0.25;
-	stroke: none;
-}
+/* Today's cell: dedicated purple for any today status EXCEPT yellow
+   (today-missed) — a due-but-undone today is the graph's call to action
+   and always keeps its yellow. Purple is the one hue the status palette
+   doesn't use; * / ~ glyphs carry completed/skipped state on it. */
+.habit-graph-svg .today rect { fill: #9b59b6; }
+.habit-graph-svg .today text { fill: white; }
 
 .habit-graph-svg text {
 	font-family: var(--font-monospace);
@@ -133,3 +129,4 @@
 .theme-dark .habit-graph-svg .yellow rect { fill: #c8883e; }
 .theme-dark .habit-graph-svg .red rect { fill: #b43c39; }
 .theme-dark .habit-graph-svg .gray rect { fill: #888888; }
+.theme-dark .habit-graph-svg .today rect { fill: #7d4394; }
