@@ -211,6 +211,31 @@ export class GraphRenderer {
 		svg.setAttribute('width', '100%');
 		svg.setAttribute('height', '20');
 
+		// Diagonal-stripe pattern for today-overdue cells (see .red-bright in
+		// styles.css). Every svg carries its own copy under the same id: SVG
+		// resolves url(#id) to the first live match in the document, so each
+		// graph keeps working no matter which other rows get re-rendered or
+		// removed. Stripe colors come from CSS classes for theme awareness.
+		const defs = document.createElementNS(svgNS, 'defs');
+		const pattern = document.createElementNS(svgNS, 'pattern');
+		pattern.setAttribute('id', 'habit-today-overdue-stripes');
+		pattern.setAttribute('width', '6');
+		pattern.setAttribute('height', '6');
+		pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+		pattern.setAttribute('patternTransform', 'rotate(45)');
+		const stripeBase = document.createElementNS(svgNS, 'rect');
+		stripeBase.setAttribute('class', 'overdue-stripe-base');
+		stripeBase.setAttribute('width', '6');
+		stripeBase.setAttribute('height', '6');
+		const stripeAlt = document.createElementNS(svgNS, 'rect');
+		stripeAlt.setAttribute('class', 'overdue-stripe-alt');
+		stripeAlt.setAttribute('width', '3');
+		stripeAlt.setAttribute('height', '6');
+		pattern.appendChild(stripeBase);
+		pattern.appendChild(stripeAlt);
+		defs.appendChild(pattern);
+		svg.appendChild(defs);
+
 		const cellCount = cells.length;
 		const cellWidthPct = 100 / cellCount;
 

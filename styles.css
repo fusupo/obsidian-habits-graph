@@ -68,9 +68,13 @@
 .habit-graph-svg .red text { fill: white; }
 
 /* Today-only escalation (#35): a rolling-window habit past its interval.
-   Deliberately hotter than .red so today out-shouts past missed cells. */
-.habit-graph-svg .red-bright rect { fill: #ff2d20; }
+   Red/white diagonal stripes (SVG pattern built in renderGraph) so today
+   unmistakably out-shouts the flat reds of past missed cells; the bright
+   red doubles as a fallback if the pattern is unavailable. */
+.habit-graph-svg .red-bright rect { fill: url(#habit-today-overdue-stripes) #ff2d20; }
 .habit-graph-svg .red-bright text { fill: white; }
+.habit-graph-svg .overdue-stripe-base { fill: #ff2d20; stroke: none; }
+.habit-graph-svg .overdue-stripe-alt { fill: #ffffff; stroke: none; }
 
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
@@ -134,6 +138,7 @@
 .theme-dark .habit-graph-svg .green-light rect { fill: #6db36d; }
 .theme-dark .habit-graph-svg .yellow rect { fill: #c8883e; }
 .theme-dark .habit-graph-svg .red rect { fill: #b43c39; }
-.theme-dark .habit-graph-svg .red-bright rect { fill: #ff453a; }
+.theme-dark .habit-graph-svg .red-bright rect { fill: url(#habit-today-overdue-stripes) #ff453a; }
+.theme-dark .habit-graph-svg .overdue-stripe-base { fill: #ff453a; }
 .theme-dark .habit-graph-svg .gray rect { fill: #888888; }
 .theme-dark .habit-graph-svg .today rect { filter: brightness(1.35); }
