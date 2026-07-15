@@ -225,12 +225,14 @@ export class GraphRenderer {
 	static calculateStreak(
 		completionDates: Date[],
 		skippedDates: Date[] = [],
-		recurrencePattern: string = 'every day'
+		recurrencePattern: string = 'every day',
+		recurrenceAnchor: RecurrenceAnchor = 'scheduled',
+		scheduledDate: Date | null = null
 	): number {
 		if (completionDates.length === 0) return 0;
 
 		const today = getTodayUTC();
-		const recurrence = parseRecurrence(recurrencePattern);
+		const recurrence = parseRecurrence(recurrencePattern, recurrenceAnchor);
 
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
@@ -250,7 +252,7 @@ export class GraphRenderer {
 					continue;
 				}
 				// Gap days where the habit wasn't due don't break the streak
-				if (!isDueOn(recurrence, currentDate, completionDate)) {
+				if (!isDueOn(recurrence, currentDate, completionDate, scheduledDate)) {
 					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 					continue;
 				}

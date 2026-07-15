@@ -349,6 +349,37 @@ describe('calculateStreak — weekly-bydays (#11)', () => {
 	});
 });
 
+describe('calculateStreak — scheduled-anchor interval (#27)', () => {
+	// Today is Wed 2025-01-15; every 3 days anchored to 2025-01-09.
+	// Due days: 09, 12, 15.
+	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+	const scheduled = parseISODate('2025-01-09');
+
+	it('off-cadence gap days do not break the streak', () => {
+		const completions = ['2025-01-09', '2025-01-12', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], EVERY3, 'scheduled', scheduled)).toBe(3);
+	});
+
+	it('a missed on-cadence day breaks the streak', () => {
+		// 2025-01-12 was due but not completed
+		const completions = ['2025-01-09', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], EVERY3, 'scheduled', scheduled)).toBe(1);
+	});
+
+	it('off-cadence completions still count while no due day is missed', () => {
+		// Completed on due days 12 and 15, plus an off-cadence 13th — all three
+		// count, matching legacy interval semantics (completions accumulate as
+		// long as no intervening due day was missed)
+		const completions = ['2025-01-12', '2025-01-13', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], EVERY3, 'scheduled', scheduled)).toBe(3);
+	});
+
+	it('without a scheduled date, falls back to legacy rolling-window streak (regression)', () => {
+		const completions = ['2025-01-09', '2025-01-12', '2025-01-15'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], EVERY3, 'scheduled', null)).toBe(3);
+	});
+});
+
 describe('calculateStreak — monthly-bymonthday (#11)', () => {
 	it('intervening non-due days do not break a monthly streak', () => {
 		// due on the 1st and 15th; today Wed 2025-01-15
