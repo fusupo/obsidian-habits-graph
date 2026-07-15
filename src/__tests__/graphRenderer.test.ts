@@ -172,6 +172,57 @@ describe('generateDayCells — fixed-schedule future days (#11)', () => {
 	});
 });
 
+describe('generateDayCells — scheduled-anchor interval past days (#27)', () => {
+	// Today is Wed 2025-01-15; every 3 days anchored to scheduled date 2025-01-09.
+	// Due days: 09, 12, 15, 18, ...
+	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+	const scheduled = parseISODate('2025-01-09');
+
+	it('due days follow the scheduled cadence, ignoring completion gaps', () => {
+		// Completed off-cadence on the 10th — under completion anchor the 12th
+		// would be rest (gap 2 < 3); under scheduled anchor it is due → missed.
+		const completions = [parseISODate('2025-01-10')];
+		const cells = GraphRenderer.generateDayCells(completions, 7, 0, EVERY3, [], 'scheduled', scheduled);
+
+		expect(statusOf(cells, '2025-01-09')).toBe('missed'); // due, not completed
+		expect(statusOf(cells, '2025-01-10')).toBe('done');
+		expect(statusOf(cells, '2025-01-11')).toBe('rest');   // off-cadence
+		expect(statusOf(cells, '2025-01-12')).toBe('missed'); // due despite gap 2 from the 10th
+		expect(statusOf(cells, '2025-01-13')).toBe('rest');
+		expect(statusOf(cells, '2025-01-14')).toBe('rest');
+	});
+
+	it('days before the scheduled date are rest, never missed', () => {
+		const cells = GraphRenderer.generateDayCells([], 10, 0, EVERY3, [], 'scheduled', scheduled);
+
+		expect(statusOf(cells, '2025-01-05')).toBe('rest');
+		expect(statusOf(cells, '2025-01-06')).toBe('rest'); // on-cadence backwards, still rest
+		expect(statusOf(cells, '2025-01-08')).toBe('rest');
+		expect(statusOf(cells, '2025-01-09')).toBe('missed'); // first due day
+	});
+
+	it('without a scheduled date, scheduled anchor falls back to rolling window (regression)', () => {
+		// Identical to the legacy every-3-days fixture — must classify identically
+		const completions = [parseISODate('2025-01-11')];
+		const cells = GraphRenderer.generateDayCells(completions, 6, 0, EVERY3, [], 'scheduled', null);
+
+		expect(statusOf(cells, '2025-01-09')).toBe('missed');
+		expect(statusOf(cells, '2025-01-10')).toBe('missed');
+		expect(statusOf(cells, '2025-01-11')).toBe('done');
+		expect(statusOf(cells, '2025-01-12')).toBe('rest');
+		expect(statusOf(cells, '2025-01-13')).toBe('rest');
+		expect(statusOf(cells, '2025-01-14')).toBe('missed');
+	});
+
+	it('completion anchor keeps rolling-window classification even with a scheduled date', () => {
+		const completions = [parseISODate('2025-01-11')];
+		const cells = GraphRenderer.generateDayCells(completions, 6, 0, EVERY3, [], 'completion', scheduled);
+
+		expect(statusOf(cells, '2025-01-12')).toBe('rest');   // gap 1 < 3, cadence irrelevant
+		expect(statusOf(cells, '2025-01-14')).toBe('missed'); // gap 3 >= 3
+	});
+});
+
 describe('generateDayCells — monthly-bymonthday past days (#11)', () => {
 	const FIRST = 'FREQ=MONTHLY;BYMONTHDAY=1';
 

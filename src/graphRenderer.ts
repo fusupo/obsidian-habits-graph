@@ -1,5 +1,5 @@
 import { formatISODate, getTodayUTC, isSameDay, addDays } from './utils/dateUtils';
-import { parseRecurrenceIntervalDays, parseRecurrence, isDueOn } from './utils/recurrenceUtils';
+import { parseRecurrenceIntervalDays, parseRecurrence, isDueOn, RecurrenceAnchor } from './utils/recurrenceUtils';
 
 export interface DayCell {
 	date: Date;
@@ -21,7 +21,9 @@ export class GraphRenderer {
 		daysBefore: number,
 		daysAfter: number,
 		recurrencePattern: string = 'every day',
-		skippedDates: Date[] = []
+		skippedDates: Date[] = [],
+		recurrenceAnchor: RecurrenceAnchor = 'scheduled',
+		scheduledDate: Date | null = null
 	): DayCell[] {
 		const cells: DayCell[] = [];
 		const today = getTodayUTC();
@@ -43,8 +45,9 @@ export class GraphRenderer {
 
 		// Parse recurrence to get ideal interval (in days) for the future window
 		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
-		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays)
-		const recurrence = parseRecurrence(recurrencePattern);
+		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays,
+		// and scheduled-anchor interval cadence when a scheduled date exists)
+		const recurrence = parseRecurrence(recurrencePattern, recurrenceAnchor);
 
 		// Sort completions ascending for per-cell interval checks on past days
 		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
@@ -98,7 +101,7 @@ export class GraphRenderer {
 				// Past: only "missed" if the habit was actually due that day
 				status = completed ? 'done'
 					: skippedSet.has(dateStr) ? 'skipped'
-					: !isDueOn(recurrence, date, lastCompBeforeCell) ? 'rest'
+					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
 					: 'missed';
 			}
 
