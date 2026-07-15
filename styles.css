@@ -70,6 +70,13 @@
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
 
+/* Vertical accent line marking today's cell; stacked rows read as one
+   continuous line. Theme variable adapts to light/dark and user accent. */
+.habit-graph-svg .today-line {
+	stroke: var(--interactive-accent);
+	stroke-width: 2;
+}
+
 .habit-graph-svg text {
 	font-family: var(--font-monospace);
 }
