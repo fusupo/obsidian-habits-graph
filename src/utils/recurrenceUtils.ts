@@ -71,10 +71,16 @@ export function parseRecurrenceIntervalDays(pattern: string): number {
 	return 1;
 }
 
+/** Frontmatter `recurrence_anchor` value; 'scheduled' is the TaskNote default. */
+export type RecurrenceAnchor = 'scheduled' | 'completion';
+
 /**
  * Structured recurrence representation.
  *
- * - 'interval': rolling window of N days since last completion
+ * - 'interval': every N days. With anchor 'completion' the window rolls from
+ *   the last completion; with anchor 'scheduled' due days are a fixed cadence
+ *   from the habit's scheduled date (isDueOn falls back to the rolling window
+ *   when no scheduled date is supplied)
  *   (FREQ=DAILY, FREQ=WEEKLY without BYDAY, legacy text patterns)
  * - 'weekly-bydays': due on fixed weekdays (FREQ=WEEKLY;BYDAY=MO,WE,FR);
  *   byDays uses JS weekday numbering, 0=Sunday..6=Saturday
@@ -82,7 +88,7 @@ export function parseRecurrenceIntervalDays(pattern: string): number {
  *   (FREQ=MONTHLY;BYMONTHDAY=1,15)
  */
 export type ParsedRecurrence =
-	| { kind: 'interval'; days: number }
+	| { kind: 'interval'; days: number; anchor: RecurrenceAnchor }
 	| { kind: 'weekly-bydays'; byDays: Set<number> }
 	| { kind: 'monthly-bymonthday'; byMonthDays: Set<number> };
 
@@ -103,8 +109,10 @@ const BYDAY_TO_WEEKDAY: Record<string, number> = {
  * Malformed fixed-day params (unrecognized BYDAY token, empty BYDAY,
  * BYMONTHDAY outside 1-31) log a warning and fall back to daily.
  * INTERVAL>1 combined with BYDAY is not supported: warns and treats as weekly.
+ * anchor 'completion' on a fixed-day schedule is a no-op: warns and stays
+ * calendar-fixed (rolling-window semantics don't apply to fixed due days).
  */
-export function parseRecurrence(pattern: string): ParsedRecurrence {
+export function parseRecurrence(pattern: string, anchor: RecurrenceAnchor = 'scheduled'): ParsedRecurrence {
 	const params = parseRRuleParams(pattern);
 
 	if (params) {
@@ -118,16 +126,19 @@ export function parseRecurrence(pattern: string): ParsedRecurrence {
 				const weekday = BYDAY_TO_WEEKDAY[token];
 				if (weekday === undefined) {
 					console.warn(`Unrecognized BYDAY token "${token}" in "${pattern}". Defaulting to daily (1 day).`);
-					return { kind: 'interval', days: 1 };
+					return { kind: 'interval', days: 1, anchor };
 				}
 				byDays.add(weekday);
 			}
 			if (byDays.size === 0) {
 				console.warn(`Empty BYDAY in "${pattern}". Defaulting to daily (1 day).`);
-				return { kind: 'interval', days: 1 };
+				return { kind: 'interval', days: 1, anchor };
 			}
 			if (interval > 1) {
 				console.warn(`INTERVAL=${interval} with BYDAY is not supported in "${pattern}". Treating as weekly.`);
+			}
+			if (anchor === 'completion') {
+				console.warn(`recurrence_anchor: completion has no effect on fixed-day schedule "${pattern}". Due days stay calendar-fixed.`);
 			}
 			return { kind: 'weekly-bydays', byDays };
 		}
@@ -139,40 +150,55 @@ export function parseRecurrence(pattern: string): ParsedRecurrence {
 				const day = parseInt(token, 10);
 				if (isNaN(day) || day < 1 || day > 31) {
 					console.warn(`Invalid BYMONTHDAY value "${token}" in "${pattern}". Defaulting to daily (1 day).`);
-					return { kind: 'interval', days: 1 };
+					return { kind: 'interval', days: 1, anchor };
 				}
 				byMonthDays.add(day);
 			}
 			if (byMonthDays.size === 0) {
 				console.warn(`Empty BYMONTHDAY in "${pattern}". Defaulting to daily (1 day).`);
-				return { kind: 'interval', days: 1 };
+				return { kind: 'interval', days: 1, anchor };
+			}
+			if (anchor === 'completion') {
+				console.warn(`recurrence_anchor: completion has no effect on fixed-day schedule "${pattern}". Due days stay calendar-fixed.`);
 			}
 			return { kind: 'monthly-bymonthday', byMonthDays };
 		}
 	}
 
-	return { kind: 'interval', days: parseRecurrenceIntervalDays(pattern) };
+	return { kind: 'interval', days: parseRecurrenceIntervalDays(pattern), anchor };
 }
 
 /**
  * Whether the habit is due on the given date.
  *
- * - 'interval': due when at least `days` have elapsed since the most recent
- *   completion strictly before `date` (rolling window). Due if there is no
- *   prior completion.
+ * - 'interval' with anchor 'scheduled' AND a non-null `scheduledDate`: due on
+ *   the fixed cadence scheduledDate, +days, +2*days, ... — completion history
+ *   is irrelevant, and days before the scheduled date are never due.
+ * - 'interval' otherwise (anchor 'completion', or anchor 'scheduled' without
+ *   a scheduled date): due when at least `days` have elapsed since the most
+ *   recent completion strictly before `date` (rolling window). Due if there
+ *   is no prior completion. The null-scheduledDate fallback is SILENT and
+ *   load-bearing: 'scheduled' is the frontmatter default, so most habits have
+ *   no scheduled date and must keep the legacy rolling-window behavior.
  * - 'weekly-bydays' / 'monthly-bymonthday': due on the fixed calendar days,
- *   independent of completion history.
+ *   independent of completion history and scheduledDate.
  *
- * `date` is expected to be a UTC-midnight Date (see dateUtils), so weekday
- * and day-of-month are read with getUTCDay()/getUTCDate().
+ * All Date params are expected to be UTC-midnight Dates (see dateUtils), so
+ * ms-diff day math is exact and weekday/day-of-month are read with
+ * getUTCDay()/getUTCDate().
  */
 export function isDueOn(
 	recurrence: ParsedRecurrence,
 	date: Date,
-	lastCompletionBefore: Date | null
+	lastCompletionBefore: Date | null,
+	scheduledDate: Date | null = null
 ): boolean {
 	switch (recurrence.kind) {
 		case 'interval': {
+			if (recurrence.anchor === 'scheduled' && scheduledDate) {
+				const daysSinceScheduled = Math.floor((date.getTime() - scheduledDate.getTime()) / MS_PER_DAY);
+				return daysSinceScheduled >= 0 && daysSinceScheduled % recurrence.days === 0;
+			}
 			if (!lastCompletionBefore) return true;
 			const gapDays = Math.floor((date.getTime() - lastCompletionBefore.getTime()) / MS_PER_DAY);
 			return gapDays >= recurrence.days;

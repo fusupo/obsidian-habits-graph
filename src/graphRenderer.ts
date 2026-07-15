@@ -1,5 +1,5 @@
 import { formatISODate, getTodayUTC, isSameDay, addDays } from './utils/dateUtils';
-import { parseRecurrenceIntervalDays, parseRecurrence, isDueOn } from './utils/recurrenceUtils';
+import { parseRecurrenceIntervalDays, parseRecurrence, isDueOn, RecurrenceAnchor } from './utils/recurrenceUtils';
 
 export interface DayCell {
 	date: Date;
@@ -21,7 +21,9 @@ export class GraphRenderer {
 		daysBefore: number,
 		daysAfter: number,
 		recurrencePattern: string = 'every day',
-		skippedDates: Date[] = []
+		skippedDates: Date[] = [],
+		recurrenceAnchor: RecurrenceAnchor = 'scheduled',
+		scheduledDate: Date | null = null
 	): DayCell[] {
 		const cells: DayCell[] = [];
 		const today = getTodayUTC();
@@ -43,8 +45,9 @@ export class GraphRenderer {
 
 		// Parse recurrence to get ideal interval (in days) for the future window
 		const intervalDays = parseRecurrenceIntervalDays(recurrencePattern);
-		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays)
-		const recurrence = parseRecurrence(recurrencePattern);
+		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays,
+		// and scheduled-anchor interval cadence when a scheduled date exists)
+		const recurrence = parseRecurrence(recurrencePattern, recurrenceAnchor);
 
 		// Sort completions ascending for per-cell interval checks on past days
 		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
@@ -80,11 +83,13 @@ export class GraphRenderer {
 			if (isToday) {
 				status = completed ? 'today-done' : skippedSet.has(dateStr) ? 'skipped' : 'today-missed';
 			} else if (isFuture) {
-				if (recurrence.kind !== 'interval') {
-					// Fixed calendar schedules: a future day is either due or not.
-					// No escalation ramp — "how overdue" has no meaning when due
-					// days don't drift with completion history.
-					status = isDueOn(recurrence, date, null) ? 'future-ok' : 'future-too-early';
+				if (recurrence.kind !== 'interval' ||
+					(recurrence.anchor === 'scheduled' && scheduledDate)) {
+					// Fixed calendar schedules (incl. scheduled-anchor cadence):
+					// a future day is either due or not. No escalation ramp —
+					// "how overdue" has no meaning when due days don't drift
+					// with completion history.
+					status = isDueOn(recurrence, date, null, scheduledDate) ? 'future-ok' : 'future-too-early';
 				} else if (daysSinceCompletion < intervalDays * 0.75) {
 					status = 'future-too-early';
 				} else if (daysSinceCompletion < intervalDays * 1.25) {
@@ -98,7 +103,7 @@ export class GraphRenderer {
 				// Past: only "missed" if the habit was actually due that day
 				status = completed ? 'done'
 					: skippedSet.has(dateStr) ? 'skipped'
-					: !isDueOn(recurrence, date, lastCompBeforeCell) ? 'rest'
+					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
 					: 'missed';
 			}
 
@@ -220,12 +225,14 @@ export class GraphRenderer {
 	static calculateStreak(
 		completionDates: Date[],
 		skippedDates: Date[] = [],
-		recurrencePattern: string = 'every day'
+		recurrencePattern: string = 'every day',
+		recurrenceAnchor: RecurrenceAnchor = 'scheduled',
+		scheduledDate: Date | null = null
 	): number {
 		if (completionDates.length === 0) return 0;
 
 		const today = getTodayUTC();
-		const recurrence = parseRecurrence(recurrencePattern);
+		const recurrence = parseRecurrence(recurrencePattern, recurrenceAnchor);
 
 		// Sort dates descending
 		const sorted = [...completionDates].sort((a, b) => b.getTime() - a.getTime());
@@ -245,7 +252,7 @@ export class GraphRenderer {
 					continue;
 				}
 				// Gap days where the habit wasn't due don't break the streak
-				if (!isDueOn(recurrence, currentDate, completionDate)) {
+				if (!isDueOn(recurrence, currentDate, completionDate, scheduledDate)) {
 					currentDate.setUTCDate(currentDate.getUTCDate() - 1);
 					continue;
 				}

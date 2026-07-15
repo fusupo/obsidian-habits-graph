@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type OrgHabitsGraphPlugin from './main';
 import { GraphRenderer } from './graphRenderer';
 import { openTaskNote } from './utils/noteOpener';
+import { parseISODateOrNull } from './utils/dateUtils';
 
 export const VIEW_TYPE_HABIT_GRAPH = 'habit-graph-view';
 
@@ -49,16 +50,19 @@ export class HabitGraphView extends ItemView {
 		for (const task of habitTasks) {
 			const completionDates = this.plugin.tasksApi.getCompletionHistory(task);
 			const skippedDates = this.plugin.tasksApi.getSkippedDates(task);
+			const scheduledDate = parseISODateOrNull(task.scheduled);
 
 			const cells = GraphRenderer.generateDayCells(
 				completionDates,
 				this.plugin.settings.daysBeforeToday,
 				this.plugin.settings.daysAfterToday,
 				task.recurrence,
-				skippedDates
+				skippedDates,
+				task.recurrenceAnchor,
+				scheduledDate
 			);
 
-			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence);
+			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence, task.recurrenceAnchor, scheduledDate);
 
 			const graphEl = GraphRenderer.renderGraph(
 				cells,

@@ -6,6 +6,7 @@ import { GraphRenderer } from './graphRenderer';
 import { TaskCacheManager } from './cache/TaskCacheManager';
 import { VaultEventHandler } from './events/VaultEventHandler';
 import { openTaskNote } from './utils/noteOpener';
+import { parseISODateOrNull } from './utils/dateUtils';
 
 export default class OrgHabitsGraphPlugin extends Plugin {
 	settings: HabitGraphSettings;
@@ -181,16 +182,19 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 		for (const task of habitTasks) {
 			const completionDates = this.tasksApi.getCompletionHistory(task);
 			const skippedDates = this.tasksApi.getSkippedDates(task);
+			const scheduledDate = parseISODateOrNull(task.scheduled);
 
 			const cells = GraphRenderer.generateDayCells(
 				completionDates,
 				this.settings.daysBeforeToday,
 				this.settings.daysAfterToday,
 				task.recurrence,
-				skippedDates
+				skippedDates,
+				task.recurrenceAnchor,
+				scheduledDate
 			);
 
-			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence);
+			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence, task.recurrenceAnchor, scheduledDate);
 
 			const graphEl = GraphRenderer.renderGraph(
 				cells,
