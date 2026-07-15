@@ -11,6 +11,7 @@ make a wrong choice without this?
 - `getTodayUTC()` must use local date components (`getFullYear/Month/Date`), not UTC (`getUTCFullYear/Month/Date`) — *why: at negative UTC offsets (e.g. PDT), UTC date can be tomorrow; "today" must match the user's wall clock*
 - graphRenderer must guard `colorClass` before `setAttribute('class', ...)` on SVG `<g>` elements — *why: empty class attributes are harmless but the guard (`if (colorClass)`) prevents meaningless DOM writes; pattern replaced addClass() in the SVG rewrite*
 - SVG elements in graphRenderer must use `document.createElementNS('http://www.w3.org/2000/svg', ...)`, not `document.createElement()` — *why: createElement produces HTML elements that render invisible inside SVG context*
+- isDueOn's scheduled-anchor interval branch must SILENTLY fall back to rolling-window completion math when scheduledDate is null — *why: 'scheduled' is the frontmatter default and most habits set no scheduled date; this fallback is what keeps pre-#27 default behavior unchanged. Do not add a console.warn here (it's the common case) and do not "fix" it to throw*
 
 ## Gotchas
 
@@ -27,8 +28,10 @@ make a wrong choice without this?
 ## Coupling
 
 - TaskNote interface field names (src/types.ts) must match pick() key args in taskParser.ts — *why: adding or renaming a TaskNote field without updating the parser's pick() calls silently drops the value*
-- parseRecurrence/isDueOn (recurrenceUtils.ts) are the scheduling authority for graphRenderer.ts: past rest/missed, fixed-schedule future cells, and streak gap days all consult isDueOn — *why: parseRecurrenceIntervalDays is now only a display/legacy heuristic that still drives the interval-kind future escalation ramp (0.75x/1.25x/1.5x); changing one bridge without the other silently diverges rendering*
-- isDueOn's 'interval' branch must reproduce the legacy rolling-window math (gap >= days, due when no prior completion) — *why: generateDayCells and calculateStreak assume exact behavioral equivalence for plain-interval habits; the regression suite in graphRenderer.test.ts was verified against the pre-#11 implementation*
+- parseRecurrence/isDueOn (recurrenceUtils.ts) are the scheduling authority for graphRenderer.ts: past rest/missed, fixed-schedule future cells, and streak gap days all consult isDueOn — *why: parseRecurrenceIntervalDays is now only a display/legacy heuristic that still drives the interval-kind future escalation ramp (0.75x/1.25x/1.5x, completion-anchor/fallback habits only since #27); changing one bridge without the other silently diverges rendering*
+- isDueOn's 'interval' branch must reproduce the legacy rolling-window math (gap >= days, due when no prior completion) on the completion-anchor/null-scheduledDate paths — *why: generateDayCells and calculateStreak assume exact behavioral equivalence for plain-interval habits; the regression suite in graphRenderer.test.ts was verified against the pre-#11 implementation*
+- main.ts renderHabitGraphCodeBlock and habitGraphView.ts refresh duplicate the render wiring (parseISODateOrNull(task.scheduled) + recurrenceAnchor/scheduledDate trailing args to generateDayCells AND calculateStreak) — *why: changing the arg list at one call site without the other silently renders sidebar and code blocks differently*
+- generateDayCells/calculateStreak new params must be appended trailing-with-defaults, never inserted — *why: all call sites (including the large test suites) pass positionally; inserting shifts meanings without a type error for same-typed params*
 - tasksApi.ts duck-types `plugin.getCachedTaskNotes` — *why: renaming in main.ts without updating the string check silently falls back to uncached `parseTaskNotesFromAllFiles`*
 - `generateDayCells` sortedCompletions pointer assumes completions sorted ascending — *why: the compIdx pointer advances forward through the array; reordering or unsorted input breaks per-cell rest-day detection*
 
