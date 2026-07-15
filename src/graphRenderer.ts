@@ -82,8 +82,8 @@ export class GraphRenderer {
 
 			if (isToday) {
 				// Same precedence as the past branch: a non-due today is a rest
-				// day, not "missed". The `!` today marker survives — it keys off
-				// cell.isToday, not status.
+				// day, not "missed". Today stays findable via the vertical
+				// accent line renderGraph draws from cell.isToday.
 				status = completed ? 'today-done'
 					: skippedSet.has(dateStr) ? 'skipped'
 					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
@@ -125,6 +125,14 @@ export class GraphRenderer {
 		}
 
 		return cells;
+	}
+
+	/**
+	 * Marker glyph for a cell — uniform across all days, including today.
+	 * Today is indicated by the vertical accent line, not a glyph.
+	 */
+	static markerForCell(cell: DayCell): '' | '*' | '~' {
+		return cell.completed ? '*' : cell.status === 'skipped' ? '~' : '';
 	}
 
 	static renderGraph(
@@ -190,14 +198,21 @@ export class GraphRenderer {
 			rect.setAttribute('height', '20');
 			g.appendChild(rect);
 
-			let marker = '';
 			if (cell.isToday) {
-				marker = cell.completed ? '*!' : '!';
-			} else if (cell.completed) {
-				marker = '*';
-			} else if (cell.status === 'skipped') {
-				marker = '~';
+				// Must sit between the rect and the marker <text>: the line
+				// paints over the cell background but under the glyph, so
+				// */~ stay legible on today's cell.
+				const line = document.createElementNS(svgNS, 'line');
+				line.setAttribute('class', 'today-line');
+				const centerX = `${cellWidthPct * i + cellWidthPct / 2}%`;
+				line.setAttribute('x1', centerX);
+				line.setAttribute('x2', centerX);
+				line.setAttribute('y1', '0');
+				line.setAttribute('y2', '20');
+				g.appendChild(line);
 			}
+
+			const marker = this.markerForCell(cell);
 
 			if (marker) {
 				const text = document.createElementNS(svgNS, 'text');

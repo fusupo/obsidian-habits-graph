@@ -451,3 +451,53 @@ describe('calculateStreak — monthly-bymonthday (#11)', () => {
 		expect(GraphRenderer.calculateStreak(completions, [], 'FREQ=MONTHLY;BYMONTHDAY=1,15')).toBe(1);
 	});
 });
+
+describe('markerForCell — uniform glyphs, no today special-case (#33)', () => {
+	function makeCell(overrides: Partial<DayCell>): DayCell {
+		return {
+			date: parseISODate('2025-01-15'),
+			isToday: false,
+			isPast: false,
+			isFuture: false,
+			completed: false,
+			daysFromLastCompletion: 0,
+			status: 'missed',
+			...overrides,
+		};
+	}
+
+	it('completed today gets a plain *, not *!', () => {
+		const cell = makeCell({ isToday: true, completed: true, status: 'today-done' });
+		expect(GraphRenderer.markerForCell(cell)).toBe('*');
+	});
+
+	it('uncompleted due today gets no glyph (the vertical line indicates today)', () => {
+		const cell = makeCell({ isToday: true, status: 'today-missed' });
+		expect(GraphRenderer.markerForCell(cell)).toBe('');
+	});
+
+	it('skipped today gets ~ (fixes the pre-existing !-instead-of-~ quirk)', () => {
+		const cell = makeCell({ isToday: true, status: 'skipped' });
+		expect(GraphRenderer.markerForCell(cell)).toBe('~');
+	});
+
+	it('non-due today (rest since #28) gets no glyph', () => {
+		const cell = makeCell({ isToday: true, status: 'rest' });
+		expect(GraphRenderer.markerForCell(cell)).toBe('');
+	});
+
+	it('completed past day gets *', () => {
+		const cell = makeCell({ isPast: true, completed: true, status: 'done' });
+		expect(GraphRenderer.markerForCell(cell)).toBe('*');
+	});
+
+	it('skipped past day gets ~', () => {
+		const cell = makeCell({ isPast: true, status: 'skipped' });
+		expect(GraphRenderer.markerForCell(cell)).toBe('~');
+	});
+
+	it('missed past days and future days get no glyph', () => {
+		expect(GraphRenderer.markerForCell(makeCell({ isPast: true, status: 'missed' }))).toBe('');
+		expect(GraphRenderer.markerForCell(makeCell({ isFuture: true, status: 'future-ok' }))).toBe('');
+	});
+});
