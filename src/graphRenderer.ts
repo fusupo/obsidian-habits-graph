@@ -244,7 +244,11 @@ export class GraphRenderer {
 			const title = document.createElementNS(svgNS, 'title');
 			const dateStr = this.dateToString(cell.date);
 			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
-			const statusText = cell.completed ? 'Done' : cell.status === 'skipped' ? 'Skipped' : (cell.status === 'rest' || cell.isFuture) ? 'Not due' : 'Missed';
+			const statusText = cell.completed ? 'Done'
+				: cell.status === 'skipped' ? 'Skipped'
+				: cell.status === 'today-overdue' ? 'Overdue'
+				: (cell.status === 'rest' || cell.isFuture) ? 'Not due'
+				: 'Missed';
 			title.textContent = `${dayName} ${dateStr}: ${statusText}`;
 			g.appendChild(title);
 
