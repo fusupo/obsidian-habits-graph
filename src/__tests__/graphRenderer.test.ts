@@ -270,6 +270,64 @@ describe('generateDayCells — scheduled-anchor interval past days (#27)', () =>
 	});
 });
 
+describe('generateDayCells — today cell on non-due days (#28)', () => {
+	// Today is Wed 2025-01-15 — NOT a due day for a Tue/Thu weekly habit.
+	const TUTH = 'FREQ=WEEKLY;BYDAY=TU,TH';
+
+	it('fixed-schedule habit: non-due today is rest, with isToday preserved for the marker', () => {
+		const completions = ['2025-01-09', '2025-01-14'].map(parseISODate); // Thu, Tue
+		const cells = GraphRenderer.generateDayCells(completions, 7, 1, TUTH);
+
+		expect(statusOf(cells, '2025-01-15')).toBe('rest');
+		expect(cellsByDate(cells).get('2025-01-15')?.isToday).toBe(true);
+	});
+
+	it('fixed-schedule habit: due today still renders today-missed (regression)', () => {
+		const cells = GraphRenderer.generateDayCells([], 7, 1, 'FREQ=WEEKLY;BYDAY=MO,WE,FR');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed'); // Wed is due
+	});
+
+	it('completing on a non-due today still shows today-done', () => {
+		const completions = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 1, 1, TUTH);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-done');
+	});
+
+	it('skipping a non-due today shows skipped (precedence over rest)', () => {
+		const skipped = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells([], 1, 1, TUTH, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('skipped');
+	});
+
+	it('rolling-window interval habit: today inside the gap is rest, not today-missed', () => {
+		// every 3 days, completed yesterday — gap 1 < 3
+		const completions = [parseISODate('2025-01-14')];
+		const cells = GraphRenderer.generateDayCells(completions, 1, 1, 'FREQ=DAILY;INTERVAL=3');
+		expect(statusOf(cells, '2025-01-15')).toBe('rest');
+	});
+
+	it('rolling-window interval habit: today at the interval gap is today-missed', () => {
+		const completions = [parseISODate('2025-01-12')]; // gap 3 >= 3
+		const cells = GraphRenderer.generateDayCells(completions, 3, 1, 'FREQ=DAILY;INTERVAL=3');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('scheduled-anchor interval habit: off-cadence today is rest, ignoring completions', () => {
+		// Anchored to 2025-01-10 — due 10, 13, 16; today (15) is off-cadence.
+		// The old completion would make the rolling window call today due; anchor wins.
+		const scheduled = parseISODate('2025-01-10');
+		const completions = [parseISODate('2025-01-10')];
+		const cells = GraphRenderer.generateDayCells(completions, 5, 1, 'FREQ=DAILY;INTERVAL=3', [], 'scheduled', scheduled);
+		expect(statusOf(cells, '2025-01-15')).toBe('rest');
+	});
+
+	it('scheduled-anchor interval habit: on-cadence today is today-missed when uncompleted', () => {
+		const scheduled = parseISODate('2025-01-09'); // due 09, 12, 15
+		const cells = GraphRenderer.generateDayCells([], 5, 1, 'FREQ=DAILY;INTERVAL=3', [], 'scheduled', scheduled);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+});
+
 describe('generateDayCells — monthly-bymonthday past days (#11)', () => {
 	const FIRST = 'FREQ=MONTHLY;BYMONTHDAY=1';
 

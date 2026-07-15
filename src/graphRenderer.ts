@@ -81,7 +81,13 @@ export class GraphRenderer {
 			let status: DayCell['status'];
 
 			if (isToday) {
-				status = completed ? 'today-done' : skippedSet.has(dateStr) ? 'skipped' : 'today-missed';
+				// Same precedence as the past branch: a non-due today is a rest
+				// day, not "missed". The `!` today marker survives — it keys off
+				// cell.isToday, not status.
+				status = completed ? 'today-done'
+					: skippedSet.has(dateStr) ? 'skipped'
+					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
+					: 'today-missed';
 			} else if (isFuture) {
 				if (recurrence.kind !== 'interval' ||
 					(recurrence.anchor === 'scheduled' && scheduledDate)) {
