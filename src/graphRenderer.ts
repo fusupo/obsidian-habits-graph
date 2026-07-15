@@ -83,11 +83,13 @@ export class GraphRenderer {
 			if (isToday) {
 				status = completed ? 'today-done' : skippedSet.has(dateStr) ? 'skipped' : 'today-missed';
 			} else if (isFuture) {
-				if (recurrence.kind !== 'interval') {
-					// Fixed calendar schedules: a future day is either due or not.
-					// No escalation ramp — "how overdue" has no meaning when due
-					// days don't drift with completion history.
-					status = isDueOn(recurrence, date, null) ? 'future-ok' : 'future-too-early';
+				if (recurrence.kind !== 'interval' ||
+					(recurrence.anchor === 'scheduled' && scheduledDate)) {
+					// Fixed calendar schedules (incl. scheduled-anchor cadence):
+					// a future day is either due or not. No escalation ramp —
+					// "how overdue" has no meaning when due days don't drift
+					// with completion history.
+					status = isDueOn(recurrence, date, null, scheduledDate) ? 'future-ok' : 'future-too-early';
 				} else if (daysSinceCompletion < intervalDays * 0.75) {
 					status = 'future-too-early';
 				} else if (daysSinceCompletion < intervalDays * 1.25) {

@@ -172,6 +172,53 @@ describe('generateDayCells — fixed-schedule future days (#11)', () => {
 	});
 });
 
+describe('generateDayCells — scheduled-anchor interval future days (#27)', () => {
+	// Today is Wed 2025-01-15; every 3 days anchored to 2025-01-09.
+	// Future due days: 18, 21, 24, ...
+	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+	const scheduled = parseISODate('2025-01-09');
+
+	it('future cells are binary due/not-due, no escalation ramp', () => {
+		// No completions in ages — the ramp would have painted everything overdue
+		const cells = GraphRenderer.generateDayCells([], 0, 7, EVERY3, [], 'scheduled', scheduled);
+
+		expect(statusOf(cells, '2025-01-16')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-01-17')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-01-18')).toBe('future-ok');
+		expect(statusOf(cells, '2025-01-19')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-01-20')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-01-21')).toBe('future-ok');
+		expect(statusOf(cells, '2025-01-22')).toBe('future-too-early');
+	});
+
+	it('future classification is independent of completion history', () => {
+		const completions = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 0, 7, EVERY3, [], 'scheduled', scheduled);
+
+		expect(statusOf(cells, '2025-01-18')).toBe('future-ok');
+		expect(statusOf(cells, '2025-01-19')).toBe('future-too-early');
+	});
+
+	it('without a scheduled date, the escalation ramp still applies (regression)', () => {
+		// Identical to the legacy every-4-days ramp fixture
+		const completions = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 0, 7, 'FREQ=DAILY;INTERVAL=4', [], 'scheduled', null);
+
+		expect(statusOf(cells, '2025-01-16')).toBe('future-too-early');
+		expect(statusOf(cells, '2025-01-18')).toBe('future-ok');
+		expect(statusOf(cells, '2025-01-20')).toBe('future-warning');
+		expect(statusOf(cells, '2025-01-21')).toBe('future-overdue');
+	});
+
+	it('completion anchor keeps the escalation ramp even with a scheduled date', () => {
+		const completions = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 0, 7, 'FREQ=DAILY;INTERVAL=4', [], 'completion', scheduled);
+
+		expect(statusOf(cells, '2025-01-20')).toBe('future-warning');
+		expect(statusOf(cells, '2025-01-21')).toBe('future-overdue');
+	});
+});
+
 describe('generateDayCells — scheduled-anchor interval past days (#27)', () => {
 	// Today is Wed 2025-01-15; every 3 days anchored to scheduled date 2025-01-09.
 	// Due days: 09, 12, 15, 18, ...
