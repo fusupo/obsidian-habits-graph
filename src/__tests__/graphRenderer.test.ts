@@ -452,6 +452,18 @@ describe('calculateStreak — interval kind (regression: legacy behavior)', () =
 		expect(GraphRenderer.calculateStreak(completions, skipped, 'FREQ=DAILY')).toBe(2);
 	});
 
+	it('today-overdue scenario leaves the streak unchanged (#35 — status is not consulted)', () => {
+		// Every-3-days rolling window, last completed 4 days ago: today renders
+		// today-overdue, but calculateStreak never reads DayCell.status — the
+		// walk-back sees an undone due day and breaks exactly as pre-#35.
+		const completions = ['2025-01-05', '2025-01-08', '2025-01-11'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(completions, [], 'FREQ=DAILY;INTERVAL=3')).toBe(0);
+
+		// Control: within the interval (not yet due again), the streak holds.
+		const fresh = ['2025-01-07', '2025-01-10', '2025-01-13'].map(parseISODate);
+		expect(GraphRenderer.calculateStreak(fresh, [], 'FREQ=DAILY;INTERVAL=3')).toBe(3);
+	});
+
 	it('every-3-days habit: rest days within interval do not break the streak', () => {
 		const completions = ['2025-01-09', '2025-01-12', '2025-01-15'].map(parseISODate);
 		expect(GraphRenderer.calculateStreak(completions, [], 'FREQ=DAILY;INTERVAL=3')).toBe(3);
