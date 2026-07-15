@@ -70,12 +70,12 @@
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
 
-/* Today's cell: dedicated purple for any today status EXCEPT yellow
-   (today-missed) — a due-but-undone today is the graph's call to action
-   and always keeps its yellow. Purple is the one hue the status palette
-   doesn't use; * / ~ glyphs carry completed/skipped state on it. */
-.habit-graph-svg .today rect { fill: #9b59b6; }
-.habit-graph-svg .today text { fill: white; }
+/* Today's cell: the normal status color tinted in place — a baked-in
+   overlay. Darkened in light theme, brightened in dark theme (cells are
+   already dark there). The 'today' class is only ever applied alongside a
+   status color and NEVER to a yellow (today-missed) cell — a due-but-
+   undone today is the graph's call to action and stays full strength. */
+.habit-graph-svg .today rect { filter: brightness(0.7); }
 
 .habit-graph-svg text {
 	font-family: var(--font-monospace);
@@ -129,4 +129,4 @@
 .theme-dark .habit-graph-svg .yellow rect { fill: #c8883e; }
 .theme-dark .habit-graph-svg .red rect { fill: #b43c39; }
 .theme-dark .habit-graph-svg .gray rect { fill: #888888; }
-.theme-dark .habit-graph-svg .today rect { fill: #7d4394; }
+.theme-dark .habit-graph-svg .today rect { filter: brightness(1.35); }

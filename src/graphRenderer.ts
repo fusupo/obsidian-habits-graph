@@ -129,35 +129,36 @@ export class GraphRenderer {
 
 	/**
 	 * Marker glyph for a cell — uniform across all days, including today.
-	 * Today is indicated by its dedicated cell color, not a glyph.
+	 * Today is indicated by its tinted cell color, not a glyph.
 	 */
 	static markerForCell(cell: DayCell): '' | '*' | '~' {
 		return cell.completed ? '*' : cell.status === 'skipped' ? '~' : '';
 	}
 
 	/**
-	 * Color class for a cell — status-driven, except that any today cell
-	 * NOT rendering yellow (today-missed) gets the dedicated 'today'
-	 * color so the current day stays findable. Yellow always wins: a
-	 * due-but-undone today is the graph's call to action. Completed and
-	 * skipped state still read from the * / ~ glyphs on the today cell.
+	 * Color class(es) for a cell — status-driven; today additionally gets
+	 * the 'today' modifier, which tints the normal status color in place
+	 * (a baked-in overlay, see styles.css) so the current day stays
+	 * findable. EXCEPT yellow (today-missed): a due-but-undone today is
+	 * the graph's call to action and keeps its full-strength color.
 	 */
 	static colorClassForCell(cell: DayCell): string {
-		if (cell.isToday && cell.status !== 'today-missed') {
-			return 'today';
-		}
+		let base: string;
 		switch (cell.status) {
-			case 'done': return 'green';
-			case 'missed': return 'red';
-			case 'skipped': return 'gray';
-			case 'rest': return 'blue';
-			case 'future-too-early': return 'blue';
-			case 'future-ok': return 'green-light';
-			case 'future-warning': return 'yellow';
-			case 'future-overdue': return 'red';
-			case 'today-done': return 'green';
-			case 'today-missed': return 'yellow';
+			case 'done': base = 'green'; break;
+			case 'missed': base = 'red'; break;
+			case 'skipped': base = 'gray'; break;
+			case 'rest': base = 'blue'; break;
+			case 'future-too-early': base = 'blue'; break;
+			case 'future-ok': base = 'green-light'; break;
+			case 'future-warning': base = 'yellow'; break;
+			case 'future-overdue': base = 'red'; break;
+			case 'today-done': base = 'green'; break;
+			case 'today-missed': base = 'yellow'; break;
 		}
+		return cell.isToday && cell.status !== 'today-missed'
+			? `${base} today`
+			: base;
 	}
 
 	static renderGraph(

@@ -502,7 +502,7 @@ describe('markerForCell — uniform glyphs, no today special-case (#33)', () => 
 	});
 });
 
-describe('colorClassForCell — dedicated today color, yellow always wins (#33)', () => {
+describe('colorClassForCell — today tint modifier, yellow always wins (#33)', () => {
 	function makeCell(overrides: Partial<DayCell>): DayCell {
 		return {
 			date: parseISODate('2025-01-15'),
@@ -521,19 +521,19 @@ describe('colorClassForCell — dedicated today color, yellow always wins (#33)'
 		expect(GraphRenderer.colorClassForCell(cell)).toBe('yellow');
 	});
 
-	it('non-due today (rest) renders the today color, not blue', () => {
+	it('non-due today (rest) keeps blue with the today tint modifier', () => {
 		const cell = makeCell({ isToday: true, status: 'rest' });
-		expect(GraphRenderer.colorClassForCell(cell)).toBe('today');
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('blue today');
 	});
 
-	it('completed today renders the today color (the * glyph carries done-ness)', () => {
+	it('completed today keeps green with the today tint modifier', () => {
 		const cell = makeCell({ isToday: true, completed: true, status: 'today-done' });
-		expect(GraphRenderer.colorClassForCell(cell)).toBe('today');
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('green today');
 	});
 
-	it('skipped today renders the today color (the ~ glyph carries skipped-ness)', () => {
+	it('skipped today keeps gray with the today tint modifier', () => {
 		const cell = makeCell({ isToday: true, status: 'skipped' });
-		expect(GraphRenderer.colorClassForCell(cell)).toBe('today');
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('gray today');
 	});
 
 	it('non-today cells keep their status-driven colors', () => {
