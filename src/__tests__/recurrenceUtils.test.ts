@@ -174,14 +174,14 @@ describe('parseRecurrence', () => {
 
 		it('warns and falls back to daily on unrecognized BYDAY token', () => {
 			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-			expect(parseRecurrence('FREQ=WEEKLY;BYDAY=MO,XX')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('FREQ=WEEKLY;BYDAY=MO,XX')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
 			expect(warnSpy).toHaveBeenCalled();
 			warnSpy.mockRestore();
 		});
 
 		it('warns and falls back to daily on empty BYDAY', () => {
 			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-			expect(parseRecurrence('FREQ=WEEKLY;BYDAY=')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('FREQ=WEEKLY;BYDAY=')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
 			expect(warnSpy).toHaveBeenCalled();
 			warnSpy.mockRestore();
 		});
@@ -214,15 +214,15 @@ describe('parseRecurrence', () => {
 
 		it('warns and falls back to daily on out-of-range BYMONTHDAY', () => {
 			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=32')).toEqual({ kind: 'interval', days: 1 });
-			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=0')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=32')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
+			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=0')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
 			expect(warnSpy).toHaveBeenCalled();
 			warnSpy.mockRestore();
 		});
 
 		it('warns and falls back to daily on non-numeric BYMONTHDAY', () => {
 			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=FIRST')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=FIRST')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
 			expect(warnSpy).toHaveBeenCalled();
 			warnSpy.mockRestore();
 		});
@@ -230,32 +230,85 @@ describe('parseRecurrence', () => {
 
 	describe('interval fallthrough', () => {
 		it('FREQ=DAILY delegates to scalar interval', () => {
-			expect(parseRecurrence('FREQ=DAILY')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('FREQ=DAILY')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
 		});
 
 		it('FREQ=DAILY;INTERVAL=3 delegates to scalar interval', () => {
-			expect(parseRecurrence('FREQ=DAILY;INTERVAL=3')).toEqual({ kind: 'interval', days: 3 });
+			expect(parseRecurrence('FREQ=DAILY;INTERVAL=3')).toEqual({ kind: 'interval', days: 3, anchor: 'scheduled' });
 		});
 
 		it('FREQ=WEEKLY without BYDAY delegates to scalar interval', () => {
-			expect(parseRecurrence('FREQ=WEEKLY')).toEqual({ kind: 'interval', days: 7 });
+			expect(parseRecurrence('FREQ=WEEKLY')).toEqual({ kind: 'interval', days: 7, anchor: 'scheduled' });
 		});
 
 		it('FREQ=MONTHLY without BYMONTHDAY delegates to scalar interval', () => {
-			expect(parseRecurrence('FREQ=MONTHLY')).toEqual({ kind: 'interval', days: 30 });
+			expect(parseRecurrence('FREQ=MONTHLY')).toEqual({ kind: 'interval', days: 30, anchor: 'scheduled' });
 		});
 
 		it('legacy "every day" delegates to scalar interval', () => {
-			expect(parseRecurrence('every day')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('every day')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
 		});
 
 		it('legacy "every 2 weeks" delegates to scalar interval', () => {
-			expect(parseRecurrence('every 2 weeks')).toEqual({ kind: 'interval', days: 14 });
+			expect(parseRecurrence('every 2 weeks')).toEqual({ kind: 'interval', days: 14, anchor: 'scheduled' });
 		});
 
 		it('unrecognized string falls back to daily (with warning)', () => {
 			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-			expect(parseRecurrence('something unknown')).toEqual({ kind: 'interval', days: 1 });
+			expect(parseRecurrence('something unknown')).toEqual({ kind: 'interval', days: 1, anchor: 'scheduled' });
+			warnSpy.mockRestore();
+		});
+	});
+
+	describe('recurrence anchor threading', () => {
+		it('defaults to scheduled anchor when no anchor argument is given', () => {
+			expect(parseRecurrence('FREQ=DAILY;INTERVAL=3')).toEqual({
+				kind: 'interval', days: 3, anchor: 'scheduled',
+			});
+		});
+
+		it('carries completion anchor onto interval recurrences', () => {
+			expect(parseRecurrence('FREQ=DAILY;INTERVAL=3', 'completion')).toEqual({
+				kind: 'interval', days: 3, anchor: 'completion',
+			});
+			expect(parseRecurrence('every 2 days', 'completion')).toEqual({
+				kind: 'interval', days: 2, anchor: 'completion',
+			});
+		});
+
+		it('carries the anchor onto malformed-pattern daily fallbacks', () => {
+			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+			expect(parseRecurrence('FREQ=WEEKLY;BYDAY=XX', 'completion')).toEqual({
+				kind: 'interval', days: 1, anchor: 'completion',
+			});
+			warnSpy.mockRestore();
+		});
+
+		it('completion anchor on BYDAY is a warned no-op (stays calendar-fixed)', () => {
+			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+			expect(parseRecurrence('FREQ=WEEKLY;BYDAY=MO,WE,FR', 'completion')).toEqual({
+				kind: 'weekly-bydays',
+				byDays: new Set([1, 3, 5]),
+			});
+			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('recurrence_anchor: completion has no effect'));
+			warnSpy.mockRestore();
+		});
+
+		it('completion anchor on BYMONTHDAY is a warned no-op (stays calendar-fixed)', () => {
+			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+			expect(parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=1,15', 'completion')).toEqual({
+				kind: 'monthly-bymonthday',
+				byMonthDays: new Set([1, 15]),
+			});
+			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('recurrence_anchor: completion has no effect'));
+			warnSpy.mockRestore();
+		});
+
+		it('scheduled anchor on fixed-day schedules does not warn', () => {
+			const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+			parseRecurrence('FREQ=WEEKLY;BYDAY=MO,WE,FR', 'scheduled');
+			parseRecurrence('FREQ=MONTHLY;BYMONTHDAY=1', 'scheduled');
+			expect(warnSpy).not.toHaveBeenCalled();
 			warnSpy.mockRestore();
 		});
 	});
@@ -263,7 +316,7 @@ describe('parseRecurrence', () => {
 
 describe('isDueOn', () => {
 	describe('interval kind (rolling window — must match legacy math)', () => {
-		const every2: ParsedRecurrence = { kind: 'interval', days: 2 };
+		const every2: ParsedRecurrence = { kind: 'interval', days: 2, anchor: 'scheduled' };
 
 		it('due when no prior completion exists', () => {
 			expect(isDueOn(every2, parseISODate('2025-01-15'), null)).toBe(true);
@@ -283,8 +336,69 @@ describe('isDueOn', () => {
 		});
 
 		it('daily habit is due every day after a completion', () => {
-			const daily: ParsedRecurrence = { kind: 'interval', days: 1 };
+			const daily: ParsedRecurrence = { kind: 'interval', days: 1, anchor: 'scheduled' };
 			expect(isDueOn(daily, parseISODate('2025-01-15'), parseISODate('2025-01-14'))).toBe(true);
+		});
+	});
+
+	describe('interval kind, scheduled anchor with a scheduled date (fixed cadence)', () => {
+		const every3Scheduled: ParsedRecurrence = { kind: 'interval', days: 3, anchor: 'scheduled' };
+		const scheduled = parseISODate('2025-01-10');
+
+		it('due on the scheduled date itself', () => {
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-10'), null, scheduled)).toBe(true);
+		});
+
+		it('due on exact cadence multiples from the scheduled date', () => {
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-13'), null, scheduled)).toBe(true);
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-16'), null, scheduled)).toBe(true);
+			expect(isDueOn(every3Scheduled, parseISODate('2025-02-09'), null, scheduled)).toBe(true); // +30 days
+		});
+
+		it('not due on off-cadence days', () => {
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-11'), null, scheduled)).toBe(false);
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-12'), null, scheduled)).toBe(false);
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-14'), null, scheduled)).toBe(false);
+		});
+
+		it('never due before the scheduled date', () => {
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-09'), null, scheduled)).toBe(false);
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-07'), null, scheduled)).toBe(false); // on-cadence going backwards
+		});
+
+		it('ignores completion history entirely', () => {
+			// completed yesterday — on-cadence day is still due
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-13'), parseISODate('2025-01-12'), scheduled)).toBe(true);
+			// long gap since completion — off-cadence day is still not due
+			expect(isDueOn(every3Scheduled, parseISODate('2025-01-14'), parseISODate('2025-01-01'), scheduled)).toBe(false);
+		});
+	});
+
+	describe('interval kind, anchor/scheduledDate fallback contract', () => {
+		const every2Scheduled: ParsedRecurrence = { kind: 'interval', days: 2, anchor: 'scheduled' };
+		const every2Completion: ParsedRecurrence = { kind: 'interval', days: 2, anchor: 'completion' };
+
+		it('scheduled anchor without a scheduled date falls back to the rolling window (silent, load-bearing)', () => {
+			// Pinned against the legacy pre-anchor implementation
+			expect(isDueOn(every2Scheduled, parseISODate('2025-01-15'), null)).toBe(true);
+			expect(isDueOn(every2Scheduled, parseISODate('2025-01-15'), parseISODate('2025-01-14'))).toBe(false);
+			expect(isDueOn(every2Scheduled, parseISODate('2025-01-15'), parseISODate('2025-01-13'))).toBe(true);
+			expect(isDueOn(every2Scheduled, parseISODate('2025-01-15'), parseISODate('2025-01-10'))).toBe(true);
+		});
+
+		it('completion anchor uses the rolling window even when a scheduled date is supplied', () => {
+			const scheduled = parseISODate('2025-01-10');
+			// gap 1 < 2 → not due, even though 2025-01-14 is on the scheduled cadence
+			expect(isDueOn(every2Completion, parseISODate('2025-01-14'), parseISODate('2025-01-13'), scheduled)).toBe(false);
+			// gap 2 → due, even though 2025-01-15 is off the scheduled cadence
+			expect(isDueOn(every2Completion, parseISODate('2025-01-15'), parseISODate('2025-01-13'), scheduled)).toBe(true);
+		});
+
+		it('fixed-day kinds ignore scheduledDate', () => {
+			const monWedFri: ParsedRecurrence = { kind: 'weekly-bydays', byDays: new Set([1, 3, 5]) };
+			const scheduled = parseISODate('2025-01-14'); // a Tuesday
+			expect(isDueOn(monWedFri, parseISODate('2025-01-15'), null, scheduled)).toBe(true);  // Wed still due
+			expect(isDueOn(monWedFri, parseISODate('2025-01-14'), null, scheduled)).toBe(false); // Tue still not due
 		});
 	});
 
