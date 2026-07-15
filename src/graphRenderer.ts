@@ -8,7 +8,7 @@ export interface DayCell {
 	isFuture: boolean;
 	completed: boolean;
 	daysFromLastCompletion: number;
-	status: 'done' | 'missed' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed';
+	status: 'done' | 'missed' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed' | 'today-overdue';
 }
 
 export class GraphRenderer {
@@ -48,6 +48,12 @@ export class GraphRenderer {
 		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays,
 		// and scheduled-anchor interval cadence when a scheduled date exists)
 		const recurrence = parseRecurrence(recurrencePattern, recurrenceAnchor);
+		// Rolling-window habits (completion-anchor, or scheduled-anchor with no
+		// scheduled date) have due days that drift with completion history —
+		// mirrors isDueOn's interval-branch fallback. Fixed calendar schedules
+		// are everything else.
+		const isRollingWindowInterval = recurrence.kind === 'interval' &&
+			!(recurrence.anchor === 'scheduled' && scheduledDate);
 
 		// Sort completions ascending for per-cell interval checks on past days
 		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
@@ -82,15 +88,25 @@ export class GraphRenderer {
 
 			if (isToday) {
 				// Same precedence as the past branch: a non-due today is a rest
-				// day, not "missed". Today stays findable via the vertical
-				// accent line renderGraph draws from cell.isToday.
+				// day, not "missed". Today stays findable via the brightness
+				// tint colorClassForCell applies from cell.isToday.
+				// The final "missed variant" slot escalates for rolling-window
+				// habits already past their interval: the due day has come and
+				// gone, so today is overdue, not merely due. Needs an anchor to
+				// be overdue FROM — the last completion, or the scheduled date
+				// if never completed. A brand-new habit with neither is
+				// day-one-due, with nothing yet to be overdue from.
+				const overdueGap = lastCompBeforeCell !== null ? daysSincePriorComp
+					: scheduledDate ? Math.floor((date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+					: null;
 				status = completed ? 'today-done'
 					: skippedSet.has(dateStr) ? 'skipped'
 					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
+					: (isRollingWindowInterval && overdueGap !== null &&
+						overdueGap > intervalDays) ? 'today-overdue'
 					: 'today-missed';
 			} else if (isFuture) {
-				if (recurrence.kind !== 'interval' ||
-					(recurrence.anchor === 'scheduled' && scheduledDate)) {
+				if (!isRollingWindowInterval) {
 					// Fixed calendar schedules (incl. scheduled-anchor cadence):
 					// a future day is either due or not. No escalation ramp —
 					// "how overdue" has no meaning when due days don't drift
@@ -139,8 +155,9 @@ export class GraphRenderer {
 	 * Color class(es) for a cell — status-driven; today additionally gets
 	 * the 'today' modifier, which tints the normal status color in place
 	 * (a baked-in overlay, see styles.css) so the current day stays
-	 * findable. EXCEPT yellow (today-missed): a due-but-undone today is
-	 * the graph's call to action and keeps its full-strength color.
+	 * findable. EXCEPT the calls to action: yellow (today-missed) and
+	 * bright red (today-overdue) only ever appear on today and keep their
+	 * full-strength color.
 	 */
 	static colorClassForCell(cell: DayCell): string {
 		let base: string;
@@ -155,8 +172,10 @@ export class GraphRenderer {
 			case 'future-overdue': base = 'red'; break;
 			case 'today-done': base = 'green'; break;
 			case 'today-missed': base = 'yellow'; break;
+			case 'today-overdue': base = 'red-bright'; break;
 		}
-		return cell.isToday && cell.status !== 'today-missed'
+		const isCallToAction = cell.status === 'today-missed' || cell.status === 'today-overdue';
+		return cell.isToday && !isCallToAction
 			? `${base} today`
 			: base;
 	}
@@ -191,6 +210,31 @@ export class GraphRenderer {
 		svg.setAttribute('class', 'habit-graph-svg');
 		svg.setAttribute('width', '100%');
 		svg.setAttribute('height', '20');
+
+		// Diagonal-stripe pattern for today-overdue cells (see .red-bright in
+		// styles.css). Every svg carries its own copy under the same id: SVG
+		// resolves url(#id) to the first live match in the document, so each
+		// graph keeps working no matter which other rows get re-rendered or
+		// removed. Stripe colors come from CSS classes for theme awareness.
+		const defs = document.createElementNS(svgNS, 'defs');
+		const pattern = document.createElementNS(svgNS, 'pattern');
+		pattern.setAttribute('id', 'habit-today-overdue-stripes');
+		pattern.setAttribute('width', '6');
+		pattern.setAttribute('height', '6');
+		pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+		pattern.setAttribute('patternTransform', 'rotate(45)');
+		const stripeBase = document.createElementNS(svgNS, 'rect');
+		stripeBase.setAttribute('class', 'overdue-stripe-base');
+		stripeBase.setAttribute('width', '6');
+		stripeBase.setAttribute('height', '6');
+		const stripeAlt = document.createElementNS(svgNS, 'rect');
+		stripeAlt.setAttribute('class', 'overdue-stripe-alt');
+		stripeAlt.setAttribute('width', '3');
+		stripeAlt.setAttribute('height', '6');
+		pattern.appendChild(stripeBase);
+		pattern.appendChild(stripeAlt);
+		defs.appendChild(pattern);
+		svg.appendChild(defs);
 
 		const cellCount = cells.length;
 		const cellWidthPct = 100 / cellCount;
@@ -229,7 +273,11 @@ export class GraphRenderer {
 			const title = document.createElementNS(svgNS, 'title');
 			const dateStr = this.dateToString(cell.date);
 			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
-			const statusText = cell.completed ? 'Done' : cell.status === 'skipped' ? 'Skipped' : (cell.status === 'rest' || cell.isFuture) ? 'Not due' : 'Missed';
+			const statusText = cell.completed ? 'Done'
+				: cell.status === 'skipped' ? 'Skipped'
+				: cell.status === 'today-overdue' ? 'Overdue'
+				: (cell.status === 'rest' || cell.isFuture) ? 'Not due'
+				: 'Missed';
 			title.textContent = `${dayName} ${dateStr}: ${statusText}`;
 			g.appendChild(title);
 
