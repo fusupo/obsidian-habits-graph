@@ -8,7 +8,7 @@ export interface DayCell {
 	isFuture: boolean;
 	completed: boolean;
 	daysFromLastCompletion: number;
-	status: 'done' | 'missed' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed';
+	status: 'done' | 'missed' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed' | 'today-overdue';
 }
 
 export class GraphRenderer {
@@ -48,6 +48,12 @@ export class GraphRenderer {
 		// Structured recurrence drives due-day decisions (fixed weekdays/monthdays,
 		// and scheduled-anchor interval cadence when a scheduled date exists)
 		const recurrence = parseRecurrence(recurrencePattern, recurrenceAnchor);
+		// Rolling-window habits (completion-anchor, or scheduled-anchor with no
+		// scheduled date) have due days that drift with completion history —
+		// mirrors isDueOn's interval-branch fallback. Fixed calendar schedules
+		// are everything else.
+		const isRollingWindowInterval = recurrence.kind === 'interval' &&
+			!(recurrence.anchor === 'scheduled' && scheduledDate);
 
 		// Sort completions ascending for per-cell interval checks on past days
 		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
@@ -82,15 +88,21 @@ export class GraphRenderer {
 
 			if (isToday) {
 				// Same precedence as the past branch: a non-due today is a rest
-				// day, not "missed". Today stays findable via the vertical
-				// accent line renderGraph draws from cell.isToday.
+				// day, not "missed". Today stays findable via the brightness
+				// tint colorClassForCell applies from cell.isToday.
+				// The final "missed variant" slot escalates for rolling-window
+				// habits already past their interval: the due day has come and
+				// gone, so today is overdue, not merely due. Requires a prior
+				// completion — a never-completed habit (infinite gap) is
+				// day-one-due, with nothing yet to be overdue from.
 				status = completed ? 'today-done'
 					: skippedSet.has(dateStr) ? 'skipped'
 					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
+					: (isRollingWindowInterval && lastCompBeforeCell !== null &&
+						daysSincePriorComp > intervalDays) ? 'today-overdue'
 					: 'today-missed';
 			} else if (isFuture) {
-				if (recurrence.kind !== 'interval' ||
-					(recurrence.anchor === 'scheduled' && scheduledDate)) {
+				if (!isRollingWindowInterval) {
 					// Fixed calendar schedules (incl. scheduled-anchor cadence):
 					// a future day is either due or not. No escalation ramp —
 					// "how overdue" has no meaning when due days don't drift
@@ -155,6 +167,7 @@ export class GraphRenderer {
 			case 'future-overdue': base = 'red'; break;
 			case 'today-done': base = 'green'; break;
 			case 'today-missed': base = 'yellow'; break;
+			case 'today-overdue': base = 'red-bright'; break;
 		}
 		return cell.isToday && cell.status !== 'today-missed'
 			? `${base} today`

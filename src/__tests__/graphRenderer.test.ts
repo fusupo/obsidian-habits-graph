@@ -66,6 +66,9 @@ describe('generateDayCells — interval kind (regression: legacy rolling-window 
 		const done = GraphRenderer.generateDayCells([parseISODate('2025-01-15')], 1, 1, 'FREQ=DAILY');
 		expect(statusOf(done, '2025-01-15')).toBe('today-done');
 
+		// Load-bearing for #35: never completed → gap is Infinity, but with no
+		// prior completion there is nothing to be overdue FROM — day-one-due
+		// stays yellow, never today-overdue.
 		const missed = GraphRenderer.generateDayCells([], 1, 1, 'FREQ=DAILY');
 		expect(statusOf(missed, '2025-01-15')).toBe('today-missed');
 	});
@@ -307,6 +310,8 @@ describe('generateDayCells — today cell on non-due days (#28)', () => {
 	});
 
 	it('rolling-window interval habit: today at the interval gap is today-missed', () => {
+		// Load-bearing boundary for #35 too: gap === interval is the due day
+		// itself (yellow), not yet overdue — escalation requires strictly >.
 		const completions = [parseISODate('2025-01-12')]; // gap 3 >= 3
 		const cells = GraphRenderer.generateDayCells(completions, 3, 1, 'FREQ=DAILY;INTERVAL=3');
 		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
@@ -325,6 +330,83 @@ describe('generateDayCells — today cell on non-due days (#28)', () => {
 		const scheduled = parseISODate('2025-01-09'); // due 09, 12, 15
 		const cells = GraphRenderer.generateDayCells([], 5, 1, 'FREQ=DAILY;INTERVAL=3', [], 'scheduled', scheduled);
 		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+});
+
+describe('generateDayCells — today-overdue for rolling-window habits (#35)', () => {
+	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+
+	it('default scheduled anchor with no scheduled date: gap > interval escalates to today-overdue', () => {
+		// The frontmatter-default rolling-window fallback path.
+		const completions = [parseISODate('2025-01-11')]; // gap 4 > 3
+		const cells = GraphRenderer.generateDayCells(completions, 5, 1, EVERY3);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('completion anchor: gap > interval escalates to today-overdue', () => {
+		const completions = [parseISODate('2025-01-11')]; // gap 4 > 3
+		const cells = GraphRenderer.generateDayCells(completions, 5, 1, EVERY3, [], 'completion');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('daily habit last completed 2 days ago is today-overdue (gap 2 > interval 1)', () => {
+		const completions = [parseISODate('2025-01-13')];
+		const cells = GraphRenderer.generateDayCells(completions, 3, 1, 'FREQ=DAILY');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('daily habit last completed yesterday stays today-missed (gap 1 === interval 1)', () => {
+		const completions = [parseISODate('2025-01-14')];
+		const cells = GraphRenderer.generateDayCells(completions, 3, 1, 'FREQ=DAILY');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('never-completed rolling-window habit stays today-missed despite infinite gap', () => {
+		const cells = GraphRenderer.generateDayCells([], 5, 1, EVERY3);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('fixed-schedule habit due today stays today-missed regardless of gap', () => {
+		// Wed is due; last completion 9 days back — no escalation for fixed
+		// calendars, where each due day is its own instance.
+		const completions = [parseISODate('2025-01-06')];
+		const cells = GraphRenderer.generateDayCells(completions, 10, 1, 'FREQ=WEEKLY;BYDAY=MO,WE,FR');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('scheduled-anchor interval habit on-cadence today stays today-missed despite gap > interval', () => {
+		// Fixed cadence anchored at 2025-01-09 (due 09, 12, 15): the missed
+		// 12th is its own past red cell; today is merely due, not overdue.
+		const scheduled = parseISODate('2025-01-09');
+		const completions = [parseISODate('2025-01-09')]; // gap 6 > 3
+		const cells = GraphRenderer.generateDayCells(completions, 7, 1, EVERY3, [], 'scheduled', scheduled);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('completion anchor with a scheduled date set is STILL rolling window — escalates', () => {
+		// Anchor semantics win over the presence of a scheduledDate.
+		const scheduled = parseISODate('2025-01-09');
+		const completions = [parseISODate('2025-01-11')]; // gap 4 > 3
+		const cells = GraphRenderer.generateDayCells(completions, 5, 1, EVERY3, [], 'completion', scheduled);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('escalation only applies to today: past over-gap days remain plain missed', () => {
+		const completions = [parseISODate('2025-01-08')];
+		const cells = GraphRenderer.generateDayCells(completions, 7, 1, EVERY3);
+		// 01-12 (gap 4) and beyond were also past the interval — still 'missed'.
+		expect(statusOf(cells, '2025-01-12')).toBe('missed');
+		expect(statusOf(cells, '2025-01-13')).toBe('missed');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('completed or skipped today takes precedence over overdue escalation', () => {
+		const completions = [parseISODate('2025-01-11'), parseISODate('2025-01-15')];
+		const done = GraphRenderer.generateDayCells(completions, 5, 1, EVERY3);
+		expect(statusOf(done, '2025-01-15')).toBe('today-done');
+
+		const skipped = GraphRenderer.generateDayCells([parseISODate('2025-01-11')], 5, 1, EVERY3, [parseISODate('2025-01-15')]);
+		expect(statusOf(skipped, '2025-01-15')).toBe('skipped');
 	});
 });
 
