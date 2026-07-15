@@ -60,7 +60,7 @@ The future ramp already encodes this escalation (`future-ok` → `future-warning
     - explicit `anchor: 'completion'` with a scheduledDate also set → still rolling window → `today-overdue` (easy to get backwards)
   - Why: this is the semantics change; everything else hangs off the new status value.
 
-- [ ] **Task 2: New `red-bright` color for `today-overdue`, tint-exempt in `colorClassForCell`**
+- [x] **Task 2: New `red-bright` color for `today-overdue`, tint-exempt in `colorClassForCell`**
   - Files affected: src/graphRenderer.ts, styles.css, src/__tests__/graphRenderer.test.ts
   - Add `case 'today-overdue': base = 'red-bright'; break;` — a NEW color class, brighter than the established `.red`, today-only. Past missed days keep `.red` unchanged.
   - styles.css: add `.habit-graph-svg .red-bright rect` (+ text fill white) in both light and dark sections — noticeably brighter/more saturated than `.red` (#d9534f light / #b43c39 dark); exact shade subject to visual iteration in the live vault.
@@ -138,6 +138,8 @@ Escalate within the existing "missed variant" slot, gated on (rolling-window kin
 ### 2026-07-15 - Session Start
 - Completed: Task 1 (today-overdue status in generateDayCells)
   - Notes: TS definite-assignment forced the `case 'today-overdue': base = 'red-bright'` line into Task 1 (switch must stay exhaustive to compile); tint exemption/CSS/tests remain Task 2. Also fixed the stale "vertical accent line" comment in the today branch (leftover from #33's early design). Extracted `isRollingWindowInterval` and refactored the future branch to use it (pure refactor, #11/#27 suites green). 10 new tests incl. today-only escalation (past over-gap days stay plain 'missed') and precedence (done/skipped beat overdue). 192 tests passing.
+- Completed: Task 2 (red-bright color + tint exemption)
+  - Notes: tint exemption now the call-to-action set (today-missed, today-overdue); .red-bright fills #ff2d20 light / #ff453a dark (vivid vs the muted .red #d9534f/#b43c39 — subject to visual iteration); styles.css committed via the hunk-only blob technique (user's .habit-label edit excluded). 194 tests passing.
 
 ---
 **Generated:** 2026-07-15

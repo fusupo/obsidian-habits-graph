@@ -151,8 +151,9 @@ export class GraphRenderer {
 	 * Color class(es) for a cell — status-driven; today additionally gets
 	 * the 'today' modifier, which tints the normal status color in place
 	 * (a baked-in overlay, see styles.css) so the current day stays
-	 * findable. EXCEPT yellow (today-missed): a due-but-undone today is
-	 * the graph's call to action and keeps its full-strength color.
+	 * findable. EXCEPT the calls to action: yellow (today-missed) and
+	 * bright red (today-overdue) only ever appear on today and keep their
+	 * full-strength color.
 	 */
 	static colorClassForCell(cell: DayCell): string {
 		let base: string;
@@ -169,7 +170,8 @@ export class GraphRenderer {
 			case 'today-missed': base = 'yellow'; break;
 			case 'today-overdue': base = 'red-bright'; break;
 		}
-		return cell.isToday && cell.status !== 'today-missed'
+		const isCallToAction = cell.status === 'today-missed' || cell.status === 'today-overdue';
+		return cell.isToday && !isCallToAction
 			? `${base} today`
 			: base;
 	}

@@ -603,6 +603,11 @@ describe('colorClassForCell — today tint modifier, yellow always wins (#33)', 
 		expect(GraphRenderer.colorClassForCell(cell)).toBe('yellow');
 	});
 
+	it('overdue today stays bright red, untinted (#35 — second call to action)', () => {
+		const cell = makeCell({ isToday: true, status: 'today-overdue' });
+		expect(GraphRenderer.colorClassForCell(cell)).toBe('red-bright');
+	});
+
 	it('non-due today (rest) keeps blue with the today tint modifier', () => {
 		const cell = makeCell({ isToday: true, status: 'rest' });
 		expect(GraphRenderer.colorClassForCell(cell)).toBe('blue today');
@@ -627,5 +632,12 @@ describe('colorClassForCell — today tint modifier, yellow always wins (#33)', 
 		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-too-early' }))).toBe('blue');
 		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-warning' }))).toBe('yellow');
 		expect(GraphRenderer.colorClassForCell(makeCell({ isFuture: true, status: 'future-overdue' }))).toBe('red');
+	});
+
+	it('today-overdue base mapping is red-bright, distinct from the ordinary red (#35)', () => {
+		// Past missed days keep the established red; only today's overdue
+		// cell uses the brighter attention color.
+		expect(GraphRenderer.colorClassForCell(makeCell({ isToday: true, status: 'today-overdue' }))).toBe('red-bright');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'missed' }))).toBe('red');
 	});
 });
