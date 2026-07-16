@@ -59,6 +59,17 @@ export class GraphRenderer {
 		const sortedCompletions = [...completionDates].sort((a, b) => a.getTime() - b.getTime());
 		let compIdx = 0;
 
+		// Most recent skip strictly before today: for the overdue clock, an
+		// excused instance counts like a completion (reset, not pause). A
+		// skip ON today is handled by the precedence chain instead.
+		let lastSkipBeforeToday: Date | null = null;
+		for (const skip of skippedDates) {
+			if (skip.getTime() < today.getTime() &&
+				(!lastSkipBeforeToday || skip.getTime() > lastSkipBeforeToday.getTime())) {
+				lastSkipBeforeToday = skip;
+			}
+		}
+
 		// Generate cells from past to future
 		for (let i = -daysBefore; i <= daysAfter; i++) {
 			const date = addDays(today, i);
@@ -93,10 +104,16 @@ export class GraphRenderer {
 				// The final "missed variant" slot escalates for rolling-window
 				// habits already past their interval: the due day has come and
 				// gone, so today is overdue, not merely due. Needs an anchor to
-				// be overdue FROM — the last completion, or the scheduled date
-				// if never completed. A brand-new habit with neither is
-				// day-one-due, with nothing yet to be overdue from.
-				const overdueGap = lastCompBeforeCell !== null ? daysSincePriorComp
+				// be overdue FROM — the last completion or last skip (whichever
+				// is later: a skip resets the clock, it doesn't merely pause
+				// it), else the scheduled date. A brand-new habit with no
+				// anchor is day-one-due, with nothing yet to be overdue from.
+				const anchorTime = Math.max(
+					lastCompBeforeCell ? lastCompBeforeCell.getTime() : -Infinity,
+					lastSkipBeforeToday ? lastSkipBeforeToday.getTime() : -Infinity
+				);
+				const overdueGap = anchorTime !== -Infinity
+					? Math.floor((date.getTime() - anchorTime) / (1000 * 60 * 60 * 24))
 					: scheduledDate ? Math.floor((date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
 					: null;
 				status = completed ? 'today-done'
