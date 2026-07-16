@@ -57,9 +57,9 @@ Real case: daily habit (completion anchor), completed 07-14, **skipped 07-15**, 
   - Why: issue AC explicitly requires the lore update; README precedent from #33/#35.
 
 ### Quality Checks
-- [ ] `npx jest --runInBand` (NEVER parallel), then `npx tsc -noEmit -skipLibCheck` (sequential)
-- [ ] Self-review
-- [ ] Visual check in live vault: "Give Robel iron pills" (completed 07-14, skipped 07-15) should show yellow today after `npm run build`
+- [x] `npx jest --runInBand` (NEVER parallel), then `npx tsc -noEmit -skipLibCheck` (sequential) — 204 passing
+- [x] Self-review
+- [x] Visual check in live vault: "Give Robel iron pills" (completed 07-14, skipped 07-15) shows yellow today — user proceeded to PR
 
 ## Technical Notes
 
@@ -98,6 +98,12 @@ Reset semantics: the most recent excused instance is as good as a completion for
 ### 2026-07-16 - Session
 - Completed: Task 1 (skip-aware overdue anchor)
   - Notes: `lastSkipBeforeToday` computed once before the cell loop; anchor via Math.max of epoch times (-Infinity sentinel) so the completion/skip max falls through to the scheduledDate fallback cleanly. 7 new tests incl. past-cells-unaffected and skip-today precedence regressions. 204 tests passing.
+- Completed: Task 2 (lore invariant + README legend); production build deployed.
+
+### 2026-07-16 - Session Complete
+- All tasks complete; commits 0dd4d6e, f64a563
+- Quality checks passed (204 tests --runInBand, tsc clean); visual check approved
+- Ready for PR: yes
 
 ---
 **Generated:** 2026-07-16
