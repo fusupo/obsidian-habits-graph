@@ -79,13 +79,17 @@
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
 
-/* Today's cell: the normal status color tinted in place — a baked-in
-   overlay. Darkened in light theme, brightened in dark theme (cells are
-   already dark there). The 'today' class is only ever applied alongside a
-   status color and NEVER to the call-to-action cells — yellow
-   (today-missed) and bright red (today-overdue) only ever appear on
-   today and stay full strength. */
-.habit-graph-svg .today rect { filter: brightness(0.7); }
+/* Today's cell: the normal status color with a darker (light theme) or
+   brighter (dark theme) variant so the current day stays findable. Uses
+   explicit per-base fills because WebKit (iOS) ignores CSS filter on SVG
+   elements (#41). The 'today' class is only ever applied alongside a
+   status color (green/blue/gray — exhaustive per today-branch precedence)
+   and NEVER to the call-to-action cells — yellow (today-missed) and
+   bright red (today-overdue) only ever appear on today and stay full
+   strength. A bare 'today' with no matching base renders untinted. */
+.habit-graph-svg .green.today rect { fill: #408140; }
+.habit-graph-svg .blue.today rect { fill: #557499; }
+.habit-graph-svg .gray.today rect { fill: #777777; }
 
 .habit-graph-svg text {
 	font-family: var(--font-monospace);
@@ -141,4 +145,6 @@
 .theme-dark .habit-graph-svg .red-bright rect { fill: url(#habit-today-overdue-stripes) #ff453a; }
 .theme-dark .habit-graph-svg .overdue-stripe-base { fill: #ff453a; }
 .theme-dark .habit-graph-svg .gray rect { fill: #888888; }
-.theme-dark .habit-graph-svg .today rect { filter: brightness(1.35); }
+.theme-dark .habit-graph-svg .green.today rect { fill: #64c664; }
+.theme-dark .habit-graph-svg .blue.today rect { fill: #80b9e8; }
+.theme-dark .habit-graph-svg .gray.today rect { fill: #b8b8b8; }
