@@ -62,13 +62,29 @@ export class GraphRenderer {
 		// Most recent skip strictly before today: for the overdue clock, an
 		// excused instance counts like a completion (reset, not pause). A
 		// skip ON today is handled by the precedence chain instead.
+		// The future forecast's skip anchor is today-INCLUSIVE: skipping
+		// today has no cell of its own to escalate, but it must still reset
+		// tomorrow's ramp.
 		let lastSkipBeforeToday: Date | null = null;
+		let lastSkipOnOrBeforeToday: Date | null = null;
 		for (const skip of skippedDates) {
+			if (skip.getTime() > today.getTime()) continue;
+			if (!lastSkipOnOrBeforeToday || skip.getTime() > lastSkipOnOrBeforeToday.getTime()) {
+				lastSkipOnOrBeforeToday = skip;
+			}
 			if (skip.getTime() < today.getTime() &&
 				(!lastSkipBeforeToday || skip.getTime() > lastSkipBeforeToday.getTime())) {
 				lastSkipBeforeToday = skip;
 			}
 		}
+
+		// Anchor the future ramp to the latest known instance event — last
+		// completion or last skip — so the forecast agrees with what the day
+		// will render when it arrives (a skip resets the clock, per #37).
+		const futureAnchorTime = Math.max(
+			lastCompletion.getTime(),
+			lastSkipOnOrBeforeToday ? lastSkipOnOrBeforeToday.getTime() : -Infinity
+		);
 
 		// Generate cells from past to future
 		for (let i = -daysBefore; i <= daysAfter; i++) {
@@ -90,9 +106,9 @@ export class GraphRenderer {
 				? Math.floor((date.getTime() - lastCompBeforeCell.getTime()) / (1000 * 60 * 60 * 24))
 				: Infinity;
 
-			// Days since overall last completion (for future scheduling window)
-			const daysSinceCompletion = Math.floor(
-				(date.getTime() - lastCompletion.getTime()) / (1000 * 60 * 60 * 24)
+			// Days since the completion-or-skip anchor (future scheduling window)
+			const daysSinceAnchor = Math.floor(
+				(date.getTime() - futureAnchorTime) / (1000 * 60 * 60 * 24)
 			);
 
 			let status: DayCell['status'];
@@ -129,11 +145,11 @@ export class GraphRenderer {
 					// "how overdue" has no meaning when due days don't drift
 					// with completion history.
 					status = isDueOn(recurrence, date, null, scheduledDate) ? 'future-ok' : 'future-too-early';
-				} else if (daysSinceCompletion < intervalDays * 0.75) {
+				} else if (daysSinceAnchor < intervalDays * 0.75) {
 					status = 'future-too-early';
-				} else if (daysSinceCompletion < intervalDays * 1.25) {
+				} else if (daysSinceAnchor < intervalDays * 1.25) {
 					status = 'future-ok';
-				} else if (daysSinceCompletion < intervalDays * 1.5) {
+				} else if (daysSinceAnchor < intervalDays * 1.5) {
 					status = 'future-warning';
 				} else {
 					status = 'future-overdue';
