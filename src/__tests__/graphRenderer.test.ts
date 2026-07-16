@@ -433,6 +433,66 @@ describe('generateDayCells — today-overdue for rolling-window habits (#35)', (
 	});
 });
 
+describe('generateDayCells — skip resets the overdue clock (#37)', () => {
+	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+
+	it('daily habit completed 2 days ago, skipped yesterday → due today, not overdue (the reported bug)', () => {
+		const completions = [parseISODate('2025-01-13')];
+		const skipped = [parseISODate('2025-01-14')];
+		const cells = GraphRenderer.generateDayCells(completions, 3, 1, 'FREQ=DAILY', skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('habit already overdue before a skip resets to due-today (reset, not pause)', () => {
+		// Completed 7 days back — days overdue had accumulated before the
+		// skip, and the skip forgives all of it.
+		const completions = [parseISODate('2025-01-08')];
+		const skipped = [parseISODate('2025-01-14')];
+		const cells = GraphRenderer.generateDayCells(completions, 8, 1, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+
+	it('overdue returns once the gap since the most recent skip exceeds the interval', () => {
+		const completions = [parseISODate('2025-01-08')];
+		const skipped = [parseISODate('2025-01-10')]; // gap since skip 5 > 3
+		const cells = GraphRenderer.generateDayCells(completions, 8, 1, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('a completion after the last skip wins the anchor', () => {
+		const completions = [parseISODate('2025-01-11')]; // gap 4 > 3
+		const skipped = [parseISODate('2025-01-09')];
+		const cells = GraphRenderer.generateDayCells(completions, 8, 1, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('never-completed habit with a lone past skip can go overdue from the skip anchor', () => {
+		// The skip proves the habit was live — "the next instance may be my
+		// responsibility" cuts both ways.
+		const skipped = [parseISODate('2025-01-10')]; // gap 5 > 3
+		const cells = GraphRenderer.generateDayCells([], 8, 1, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('skipping today itself still renders skipped (precedence unchanged)', () => {
+		const completions = [parseISODate('2025-01-08')];
+		const skipped = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 8, 1, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('skipped');
+	});
+
+	it('past cells are unaffected by the skip anchor', () => {
+		// The skip on 01-14 excuses that day only; earlier over-gap days
+		// were and remain plain missed.
+		const completions = [parseISODate('2025-01-08')];
+		const skipped = [parseISODate('2025-01-14')];
+		const cells = GraphRenderer.generateDayCells(completions, 8, 1, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-11')).toBe('missed');
+		expect(statusOf(cells, '2025-01-12')).toBe('missed');
+		expect(statusOf(cells, '2025-01-14')).toBe('skipped');
+	});
+});
+
 describe('generateDayCells — monthly-bymonthday past days (#11)', () => {
 	const FIRST = 'FREQ=MONTHLY;BYMONTHDAY=1';
 
