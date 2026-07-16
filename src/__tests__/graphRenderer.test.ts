@@ -493,6 +493,64 @@ describe('generateDayCells — skip resets the overdue clock (#37)', () => {
 	});
 });
 
+describe('generateDayCells — future ramp uses the completion-or-skip anchor (#39)', () => {
+	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+
+	it('daily habit skipped yesterday and today forecasts due-then, not overdue (the reported bug)', () => {
+		const completions = [parseISODate('2025-01-12')];
+		const skipped = [parseISODate('2025-01-14'), parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 4, 2, 'FREQ=DAILY', skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('skipped');
+		expect(statusOf(cells, '2025-01-16')).toBe('future-ok');
+		// Daily's warning band (1.25–1.5 days) contains no whole day; the
+		// ramp jumps straight to overdue. Thresholds unchanged by #39.
+		expect(statusOf(cells, '2025-01-17')).toBe('future-overdue');
+	});
+
+	it('a skip ON today resets tomorrow (the future anchor is today-inclusive)', () => {
+		// Unlike the today escalation, whose skip anchor is strictly before
+		// today (a skip on today is precedence-handled).
+		const completions = [parseISODate('2025-01-10')];
+		const skipped = [parseISODate('2025-01-15')];
+		const cells = GraphRenderer.generateDayCells(completions, 6, 1, 'FREQ=DAILY', skipped);
+		expect(statusOf(cells, '2025-01-16')).toBe('future-ok');
+	});
+
+	it('the full ramp walks from the most recent skip', () => {
+		const completions = [parseISODate('2025-01-05')];
+		const skipped = [parseISODate('2025-01-13')];
+		const cells = GraphRenderer.generateDayCells(completions, 10, 3, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-16')).toBe('future-ok');       // gap 3 < 3.75
+		expect(statusOf(cells, '2025-01-17')).toBe('future-warning');  // gap 4 < 4.5
+		expect(statusOf(cells, '2025-01-18')).toBe('future-overdue'); // gap 5
+	});
+
+	it('without skips the ramp anchors to the last completion as before (regression)', () => {
+		const completions = [parseISODate('2025-01-05')];
+		const cells = GraphRenderer.generateDayCells(completions, 10, 3, EVERY3);
+		expect(statusOf(cells, '2025-01-16')).toBe('future-overdue');
+		expect(statusOf(cells, '2025-01-17')).toBe('future-overdue');
+		expect(statusOf(cells, '2025-01-18')).toBe('future-overdue');
+	});
+
+	it('fixed-schedule future cells stay isDueOn-driven despite a recent skip', () => {
+		const skipped = [parseISODate('2025-01-14')];
+		const cells = GraphRenderer.generateDayCells([], 3, 5, 'FREQ=WEEKLY;BYDAY=MO,WE', skipped);
+		expect(statusOf(cells, '2025-01-16')).toBe('future-too-early'); // Thu, not due
+		expect(statusOf(cells, '2025-01-20')).toBe('future-ok');        // Mon, due
+	});
+
+	it("today's cell still follows the #37 strictly-before-today anchor", () => {
+		// Same skip drives both branches: today is within the interval of
+		// the 01-13 skip (due but not overdue) while the future cells above
+		// ramp from it.
+		const completions = [parseISODate('2025-01-05')];
+		const skipped = [parseISODate('2025-01-13')];
+		const cells = GraphRenderer.generateDayCells(completions, 10, 3, EVERY3, skipped);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
+	});
+});
+
 describe('generateDayCells — monthly-bymonthday past days (#11)', () => {
 	const FIRST = 'FREQ=MONTHLY;BYMONTHDAY=1';
 
