@@ -50,7 +50,7 @@ Real case: daily habit (completion anchor), completed 07-14, **skipped 07-15**, 
     - skip TODAY still renders `skipped` (precedence regression, cheap assertion)
   - Why: the entire fix; one commit.
 
-- [ ] **Task 2: Documentation — lore invariant + README legend**
+- [x] **Task 2: Documentation — lore invariant + README legend**
   - Files affected: PROJECT_LORE.md, README.md
   - Update the #35 escalation invariant: overdue anchor is "last completion or last skip (whichever is later), else the scheduled date"; note reset-not-pause and the never-completed-but-skipped case.
   - README legend bright-red line: "gap since the last completion **or skip** exceeds its interval".
