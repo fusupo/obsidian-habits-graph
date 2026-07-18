@@ -8,7 +8,7 @@ export interface DayCell {
 	isFuture: boolean;
 	completed: boolean;
 	daysFromLastCompletion: number;
-	status: 'done' | 'missed' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed' | 'today-overdue';
+	status: 'done' | 'missed' | 'missed-overdue' | 'overdue' | 'skipped' | 'rest' | 'future-too-early' | 'future-ok' | 'future-warning' | 'future-overdue' | 'today-done' | 'today-missed' | 'today-overdue';
 }
 
 export class GraphRenderer {
@@ -86,6 +86,10 @@ export class GraphRenderer {
 			lastSkipOnOrBeforeToday ? lastSkipOnOrBeforeToday.getTime() : -Infinity
 		);
 
+		// Fixed-schedule carry-over: when a due date is missed, subsequent
+		// non-due days stay red until a completion or skip clears the debt.
+		let fixedScheduleCarryOverActive = false;
+
 		// Generate cells from past to future
 		for (let i = -daysBefore; i <= daysAfter; i++) {
 			const date = addDays(today, i);
@@ -134,7 +138,8 @@ export class GraphRenderer {
 					: null;
 				status = completed ? 'today-done'
 					: skippedSet.has(dateStr) ? 'skipped'
-					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
+					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate)
+						? (fixedScheduleCarryOverActive && !isRollingWindowInterval ? 'today-overdue' : 'rest')
 					: (isRollingWindowInterval && overdueGap !== null &&
 						overdueGap > intervalDays) ? 'today-overdue'
 					: 'today-missed';
@@ -155,11 +160,25 @@ export class GraphRenderer {
 					status = 'future-overdue';
 				}
 			} else {
-				// Past: only "missed" if the habit was actually due that day
-				status = completed ? 'done'
-					: skippedSet.has(dateStr) ? 'skipped'
-					: !isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate) ? 'rest'
-					: 'missed';
+				// Past: only "missed" if the habit was actually due that day.
+				// Fixed-schedule carry-over: a missed due date activates red
+				// carry-over on subsequent non-due days until a completion or
+				// skip clears it.
+				if (completed) {
+					status = 'done';
+					fixedScheduleCarryOverActive = false;
+				} else if (skippedSet.has(dateStr)) {
+					status = 'skipped';
+					fixedScheduleCarryOverActive = false;
+				} else if (!isDueOn(recurrence, date, lastCompBeforeCell, scheduledDate)) {
+					status = fixedScheduleCarryOverActive && !isRollingWindowInterval
+						? 'overdue' : 'rest';
+				} else if (!isRollingWindowInterval) {
+					status = 'missed-overdue';
+					fixedScheduleCarryOverActive = true;
+				} else {
+					status = 'missed';
+				}
 			}
 
 			cells.push({
@@ -197,6 +216,8 @@ export class GraphRenderer {
 		switch (cell.status) {
 			case 'done': base = 'green'; break;
 			case 'missed': base = 'red'; break;
+			case 'missed-overdue': base = 'red-bright-solid'; break;
+			case 'overdue': base = 'red'; break;
 			case 'skipped': base = 'gray'; break;
 			case 'rest': base = 'blue'; break;
 			case 'future-too-early': base = 'blue'; break;
@@ -308,7 +329,7 @@ export class GraphRenderer {
 			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
 			const statusText = cell.completed ? 'Done'
 				: cell.status === 'skipped' ? 'Skipped'
-				: cell.status === 'today-overdue' ? 'Overdue'
+				: cell.status === 'today-overdue' || cell.status === 'overdue' ? 'Overdue'
 				: (cell.status === 'rest' || cell.isFuture) ? 'Not due'
 				: 'Missed';
 			title.textContent = `${dayName} ${dateStr}: ${statusText}`;
