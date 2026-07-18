@@ -113,24 +113,27 @@ describe('generateDayCells — weekly-bydays past days (#11)', () => {
 		expect(statusOf(cells, '2025-01-14')).toBe('rest'); // Tue — not scheduled
 	});
 
-	it('a missed due weekday is missed; surrounding non-due days stay rest', () => {
-		// Monday 13th NOT completed
+	it('a missed due weekday is missed-overdue; carry-over paints non-due days red (#43)', () => {
+		// Monday 13th NOT completed — carry-over activates
 		const completions = ['2025-01-08', '2025-01-10'].map(parseISODate);
 		const cells = GraphRenderer.generateDayCells(completions, 7, 0, MWF);
 
-		expect(statusOf(cells, '2025-01-11')).toBe('rest');   // Sat
-		expect(statusOf(cells, '2025-01-12')).toBe('rest');   // Sun
-		expect(statusOf(cells, '2025-01-13')).toBe('missed'); // Mon — was due
-		expect(statusOf(cells, '2025-01-14')).toBe('rest');   // Tue
+		expect(statusOf(cells, '2025-01-11')).toBe('rest');           // Sat — after Fri completion, no carry-over
+		expect(statusOf(cells, '2025-01-12')).toBe('rest');           // Sun
+		expect(statusOf(cells, '2025-01-13')).toBe('missed-overdue'); // Mon — due, missed → bright red
+		expect(statusOf(cells, '2025-01-14')).toBe('overdue');        // Tue — carry-over red
 	});
 
-	it('due weekdays are missed even with no completion history', () => {
+	it('due weekdays are missed-overdue even with no completion history; carry-over fills gaps (#43)', () => {
 		const cells = GraphRenderer.generateDayCells([], 7, 0, MWF);
 
-		expect(statusOf(cells, '2025-01-08')).toBe('missed'); // Wed
-		expect(statusOf(cells, '2025-01-09')).toBe('rest');   // Thu
-		expect(statusOf(cells, '2025-01-10')).toBe('missed'); // Fri
-		expect(statusOf(cells, '2025-01-13')).toBe('missed'); // Mon
+		expect(statusOf(cells, '2025-01-08')).toBe('missed-overdue'); // Wed
+		expect(statusOf(cells, '2025-01-09')).toBe('overdue');        // Thu — carry-over
+		expect(statusOf(cells, '2025-01-10')).toBe('missed-overdue'); // Fri — due, missed
+		expect(statusOf(cells, '2025-01-11')).toBe('overdue');        // Sat — carry-over
+		expect(statusOf(cells, '2025-01-12')).toBe('overdue');        // Sun — carry-over
+		expect(statusOf(cells, '2025-01-13')).toBe('missed-overdue'); // Mon — due, missed
+		expect(statusOf(cells, '2025-01-14')).toBe('overdue');        // Tue — carry-over
 	});
 
 	it('skipped takes precedence over rest/missed on any day', () => {
@@ -228,27 +231,27 @@ describe('generateDayCells — scheduled-anchor interval past days (#27)', () =>
 	const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
 	const scheduled = parseISODate('2025-01-09');
 
-	it('due days follow the scheduled cadence, ignoring completion gaps', () => {
+	it('due days follow the scheduled cadence; missed due dates are missed-overdue, carry-over fills gaps (#43)', () => {
 		// Completed off-cadence on the 10th — under completion anchor the 12th
-		// would be rest (gap 2 < 3); under scheduled anchor it is due → missed.
+		// would be rest (gap 2 < 3); under scheduled anchor it is due → missed-overdue.
 		const completions = [parseISODate('2025-01-10')];
 		const cells = GraphRenderer.generateDayCells(completions, 7, 0, EVERY3, [], 'scheduled', scheduled);
 
-		expect(statusOf(cells, '2025-01-09')).toBe('missed'); // due, not completed
-		expect(statusOf(cells, '2025-01-10')).toBe('done');
-		expect(statusOf(cells, '2025-01-11')).toBe('rest');   // off-cadence
-		expect(statusOf(cells, '2025-01-12')).toBe('missed'); // due despite gap 2 from the 10th
-		expect(statusOf(cells, '2025-01-13')).toBe('rest');
-		expect(statusOf(cells, '2025-01-14')).toBe('rest');
+		expect(statusOf(cells, '2025-01-09')).toBe('missed-overdue'); // due, not completed
+		expect(statusOf(cells, '2025-01-10')).toBe('done');           // completion resets carry-over
+		expect(statusOf(cells, '2025-01-11')).toBe('rest');           // off-cadence, no carry-over
+		expect(statusOf(cells, '2025-01-12')).toBe('missed-overdue'); // due despite gap 2 from the 10th
+		expect(statusOf(cells, '2025-01-13')).toBe('overdue');        // carry-over
+		expect(statusOf(cells, '2025-01-14')).toBe('overdue');        // carry-over
 	});
 
-	it('days before the scheduled date are rest, never missed', () => {
+	it('days before the scheduled date are rest, never missed-overdue', () => {
 		const cells = GraphRenderer.generateDayCells([], 10, 0, EVERY3, [], 'scheduled', scheduled);
 
 		expect(statusOf(cells, '2025-01-05')).toBe('rest');
 		expect(statusOf(cells, '2025-01-06')).toBe('rest'); // on-cadence backwards, still rest
 		expect(statusOf(cells, '2025-01-08')).toBe('rest');
-		expect(statusOf(cells, '2025-01-09')).toBe('missed'); // first due day
+		expect(statusOf(cells, '2025-01-09')).toBe('missed-overdue'); // first due day
 	});
 
 	it('without a scheduled date, scheduled anchor falls back to rolling window (regression)', () => {
@@ -317,11 +320,20 @@ describe('generateDayCells — today cell on non-due days (#28)', () => {
 		expect(statusOf(cells, '2025-01-15')).toBe('today-missed');
 	});
 
-	it('scheduled-anchor interval habit: off-cadence today is rest, ignoring completions', () => {
+	it('scheduled-anchor interval habit: off-cadence today with carry-over shows today-overdue (#43)', () => {
 		// Anchored to 2025-01-10 — due 10, 13, 16; today (15) is off-cadence.
-		// The old completion would make the rolling window call today due; anchor wins.
+		// Completed on 10, missed on 13 → carry-over active → today-overdue (stripes).
 		const scheduled = parseISODate('2025-01-10');
 		const completions = [parseISODate('2025-01-10')];
+		const cells = GraphRenderer.generateDayCells(completions, 5, 1, 'FREQ=DAILY;INTERVAL=3', [], 'scheduled', scheduled);
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');
+	});
+
+	it('scheduled-anchor interval habit: off-cadence today without carry-over is rest', () => {
+		// Anchored to 2025-01-10 — due 10, 13, 16; today (15) is off-cadence.
+		// Completed on both 10 AND 13 → no carry-over → rest.
+		const scheduled = parseISODate('2025-01-10');
+		const completions = [parseISODate('2025-01-10'), parseISODate('2025-01-13')];
 		const cells = GraphRenderer.generateDayCells(completions, 5, 1, 'FREQ=DAILY;INTERVAL=3', [], 'scheduled', scheduled);
 		expect(statusOf(cells, '2025-01-15')).toBe('rest');
 	});
@@ -564,11 +576,11 @@ describe('generateDayCells — monthly-bymonthday past days (#11)', () => {
 		expect(statusOf(cells, '2025-01-14')).toBe('rest');
 	});
 
-	it('a missed scheduled day of month is missed', () => {
+	it('a missed scheduled day of month is missed-overdue; carry-over fills subsequent days (#43)', () => {
 		const cells = GraphRenderer.generateDayCells([], 14, 0, FIRST);
 
-		expect(statusOf(cells, '2025-01-01')).toBe('missed');
-		expect(statusOf(cells, '2025-01-02')).toBe('rest');
+		expect(statusOf(cells, '2025-01-01')).toBe('missed-overdue');
+		expect(statusOf(cells, '2025-01-02')).toBe('overdue');        // carry-over
 	});
 });
 
@@ -792,5 +804,110 @@ describe('colorClassForCell — today tint modifier, yellow always wins (#33)', 
 		// cell uses the brighter attention color.
 		expect(GraphRenderer.colorClassForCell(makeCell({ isToday: true, status: 'today-overdue' }))).toBe('red-bright');
 		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'missed' }))).toBe('red');
+	});
+
+	it('overdue (carry-over) maps to red; missed-overdue maps to red-bright-solid (#43)', () => {
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'overdue' }))).toBe('red');
+		expect(GraphRenderer.colorClassForCell(makeCell({ isPast: true, status: 'missed-overdue' }))).toBe('red-bright-solid');
+	});
+});
+
+describe('markerForCell — carry-over statuses get no glyph (#43)', () => {
+	function makeCell(overrides: Partial<DayCell>): DayCell {
+		return {
+			date: parseISODate('2025-01-15'),
+			isToday: false,
+			isPast: true,
+			isFuture: false,
+			completed: false,
+			daysFromLastCompletion: 0,
+			status: 'missed',
+			...overrides,
+		};
+	}
+
+	it('overdue and missed-overdue cells render no marker glyph', () => {
+		expect(GraphRenderer.markerForCell(makeCell({ status: 'overdue' }))).toBe('');
+		expect(GraphRenderer.markerForCell(makeCell({ status: 'missed-overdue' }))).toBe('');
+	});
+});
+
+describe('generateDayCells — fixed-schedule carry-over (#43)', () => {
+	const MWF = 'FREQ=WEEKLY;BYDAY=MO,WE,FR';
+
+	it('carry-over persists across consecutive missed due dates', () => {
+		// No completions: every due date missed, carry-over never resets.
+		// Mon 06 → missed-overdue, Tue 07 → overdue, Wed 08 → missed-overdue,
+		// Thu 09 → overdue, Fri 10 → missed-overdue, Sat-Sun → overdue,
+		// Mon 13 → missed-overdue, Tue 14 → overdue
+		const cells = GraphRenderer.generateDayCells([], 7, 0, MWF);
+
+		const pastCells = cells.filter(c => c.isPast);
+		const missedOverdueDates = pastCells.filter(c => c.status === 'missed-overdue').map(c => c.date.getUTCDay());
+		// Due days (Mon=1, Wed=3, Fri=5) should all be missed-overdue
+		expect(missedOverdueDates.every(d => [1, 3, 5].includes(d))).toBe(true);
+
+		const overdueDates = pastCells.filter(c => c.status === 'overdue').map(c => c.date.getUTCDay());
+		// Non-due days (Tue=2, Thu=4, Sat=6, Sun=0) should all be overdue
+		expect(overdueDates.every(d => [0, 2, 4, 6].includes(d))).toBe(true);
+
+		// No plain 'rest' or 'missed' in the past
+		expect(pastCells.filter(c => c.status === 'rest' || c.status === 'missed').length).toBe(0);
+	});
+
+	it('skip resets carry-over — non-due days after skip are rest', () => {
+		// MWF habit: skip on Mon 13th clears the carry-over
+		const skipped = [parseISODate('2025-01-13')];
+		const cells = GraphRenderer.generateDayCells([], 7, 0, MWF, skipped);
+
+		expect(statusOf(cells, '2025-01-10')).toBe('missed-overdue'); // Fri — due, missed
+		expect(statusOf(cells, '2025-01-11')).toBe('overdue');        // Sat — carry-over
+		expect(statusOf(cells, '2025-01-12')).toBe('overdue');        // Sun — carry-over
+		expect(statusOf(cells, '2025-01-13')).toBe('skipped');        // Mon — skip resets
+		expect(statusOf(cells, '2025-01-14')).toBe('rest');           // Tue — back to rest
+	});
+
+	it('completion resets carry-over', () => {
+		const completions = [parseISODate('2025-01-12')]; // Sun off-cadence completion
+		const cells = GraphRenderer.generateDayCells(completions, 7, 0, MWF);
+
+		expect(statusOf(cells, '2025-01-10')).toBe('missed-overdue'); // Fri — due, missed
+		expect(statusOf(cells, '2025-01-11')).toBe('overdue');        // Sat — carry-over
+		expect(statusOf(cells, '2025-01-12')).toBe('done');           // Sun — completion resets
+		expect(statusOf(cells, '2025-01-13')).toBe('missed-overdue'); // Mon — due, fresh miss
+		expect(statusOf(cells, '2025-01-14')).toBe('overdue');        // Tue — new carry-over
+	});
+
+	it('today shows today-overdue (stripes) when carry-over is active and not due', () => {
+		// TUTH habit: today (Wed 2025-01-15) is not due; Tue 14 is due and missed → carry-over active
+		const TUTH = 'FREQ=WEEKLY;BYDAY=TU,TH';
+		const cells = GraphRenderer.generateDayCells([], 7, 1, TUTH);
+
+		expect(statusOf(cells, '2025-01-14')).toBe('missed-overdue'); // Tue — due, missed
+		expect(statusOf(cells, '2025-01-15')).toBe('today-overdue');  // Wed — today, carry-over → stripes
+	});
+
+	it('today carry-over does not trigger for rolling-window habits', () => {
+		// Daily habit (rolling-window): today is always due, never a carry-over scenario
+		const cells = GraphRenderer.generateDayCells([], 7, 1, 'FREQ=DAILY');
+		expect(statusOf(cells, '2025-01-15')).toBe('today-missed'); // today is due → today-missed, not carry-over
+	});
+
+	it('rolling-window habits never produce overdue or missed-overdue', () => {
+		const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+		const cells = GraphRenderer.generateDayCells([], 7, 0, EVERY3);
+
+		const statuses = cells.map(c => c.status);
+		expect(statuses).not.toContain('overdue');
+		expect(statuses).not.toContain('missed-overdue');
+	});
+
+	it('rolling-window with scheduled anchor but null scheduledDate stays rolling (regression)', () => {
+		const EVERY3 = 'FREQ=DAILY;INTERVAL=3';
+		const cells = GraphRenderer.generateDayCells([], 7, 0, EVERY3, [], 'scheduled', null);
+
+		const statuses = cells.map(c => c.status);
+		expect(statuses).not.toContain('overdue');
+		expect(statuses).not.toContain('missed-overdue');
 	});
 });
