@@ -76,6 +76,12 @@
 .habit-graph-svg .overdue-stripe-base { fill: #ff2d20; stroke: none; }
 .habit-graph-svg .overdue-stripe-alt { fill: #ffffff; stroke: none; }
 
+/* Solid bright red for past missed fixed-schedule due dates (#43):
+   same bright hex as today-overdue but without the diagonal stripes,
+   so missed due dates stand out from base-red carry-over days. */
+.habit-graph-svg .red-bright-solid rect { fill: #ff2d20; }
+.habit-graph-svg .red-bright-solid text { fill: white; }
+
 .habit-graph-svg .gray rect { fill: #aaaaaa; }
 .habit-graph-svg .gray text { fill: white; }
 
@@ -144,6 +150,7 @@
 .theme-dark .habit-graph-svg .red rect { fill: #b43c39; }
 .theme-dark .habit-graph-svg .red-bright rect { fill: url(#habit-today-overdue-stripes) #ff453a; }
 .theme-dark .habit-graph-svg .overdue-stripe-base { fill: #ff453a; }
+.theme-dark .habit-graph-svg .red-bright-solid rect { fill: #ff453a; }
 .theme-dark .habit-graph-svg .gray rect { fill: #888888; }
 .theme-dark .habit-graph-svg .green.today rect { fill: #64c664; }
 .theme-dark .habit-graph-svg .blue.today rect { fill: #80b9e8; }
