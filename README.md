@@ -55,6 +55,10 @@ Example after completion:
 - [ ] Morning workout 🔁 every day #habit 📅 2025-01-18
 ```
 
+### 4. Record or Backfill Days
+
+Click (or tap) a past or today cell to cycle that day: **done → skipped → blank**. Each click is written through the [TaskNotes](https://github.com/callumalpass/tasknotes) plugin, so TaskNotes keeps `scheduled` and the recurrence up to date. The order you click days in doesn't matter. Future cells can't be clicked, and cells stay inert if TaskNotes isn't installed.
+
 ## Graph Explanation
 
 Each habit shows a consistency graph with:
@@ -80,6 +84,7 @@ Access settings via **Settings → Org Habits Graph**:
 - **Days before today**: Number of past days to show (default: 21)
 - **Days after today**: Number of future days to show (default: 7)
 - **Show streak count**: Display current streak next to habit name (default: on)
+- **Click cells to record days**: Click a past or today cell to cycle it done → skipped → blank via TaskNotes (default: on)
 
 ## Tips
 
