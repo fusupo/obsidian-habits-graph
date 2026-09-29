@@ -29,6 +29,7 @@ make a wrong choice without this?
 - Marker glyphs (markerForCell) are uniformly completed/status-driven (`*`/`~`/none) with NO today special-case; today is indicated by colorClassForCell's 'today' brightness-tint modifier instead (since #33) — *why: isToday looks dead if you only grep markers; do not reintroduce a `!` glyph or a 'today-rest' status, and a non-due today still reuses plain 'rest' (since #28)*
 - SVG graph uses percentage-based x/width on rects (no viewBox, no preserveAspectRatio) with fixed px font-size on text — *why: cells stretch to fill container while markers stay proportional; adding viewBox would distort text or prevent cell stretching*
 - WebKit (iOS Obsidian) silently ignores CSS `filter` on SVG elements; SVG `<pattern>` fills work fine — *why: a filter-based effect looks correct on desktop Chromium and invisibly no-ops on mobile WebKit; discovered in #41 when the today brightness tint was invisible on iOS*
+- Cell/completion dates are UTC-midnight Dates representing local calendar days, so read them only with UTC accessors (`getUTCDay`, `toISOString`) or `toLocale*String(..., { timeZone: 'UTC' })` — *why: local-time reads land on the previous day at negative UTC offsets; the tooltip showed "Thu 2026-09-18" for a Friday in Oakland. jest.config.js pins `TZ=America/Los_Angeles` so such mixups fail tests on any machine — do not remove it, and do not try to switch TZ mid-test (Jest doesn't pick it up)*
 
 ## Glossary
 
