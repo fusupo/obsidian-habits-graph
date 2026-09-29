@@ -1,10 +1,10 @@
 {
-	"id": "obsidian-habits-graph",
-	"name": "Obsidian Habits Graph",
-	"version": "0.2.0",
-	"minAppVersion": "0.15.0",
-	"description": "Org-mode style habit consistency graphs for Tasks plugin recurring tasks",
-	"author": "Your Name",
-	"authorUrl": "",
-	"isDesktopOnly": false
+  "id": "obsidian-habits-graph",
+  "name": "Obsidian Habits Graph",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "Org-mode style habit consistency graphs for Tasks plugin recurring tasks",
+  "author": "Marc Christophe",
+  "authorUrl": "",
+  "isDesktopOnly": false
 }
