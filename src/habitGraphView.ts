@@ -1,17 +1,17 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type OrgHabitsGraphPlugin from './main';
-import { GraphRenderer } from './graphRenderer';
-import { openTaskNote } from './utils/noteOpener';
-import { parseISODateOrNull } from './utils/dateUtils';
+import { HabitRowSet } from './ui/habitRow';
 
 export const VIEW_TYPE_HABIT_GRAPH = 'habit-graph-view';
 
 export class HabitGraphView extends ItemView {
 	plugin: OrgHabitsGraphPlugin;
+	private rows: HabitRowSet;
 
 	constructor(leaf: WorkspaceLeaf, plugin: OrgHabitsGraphPlugin) {
 		super(leaf);
 		this.plugin = plugin;
+		this.rows = new HabitRowSet(plugin);
 	}
 
 	getViewType(): string {
@@ -27,11 +27,14 @@ export class HabitGraphView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
+		// Re-render just the changed habit's row; the full refresh on vault
+		// modify (main.ts) still handles habits being added or removed
+		this.register(this.plugin.eventHandler.onTaskChanged(path => this.rows.handleChanged(path)));
 		await this.refresh();
 	}
 
 	async onClose(): Promise<void> {
-		// Cleanup if needed
+		this.rows.clear();
 	}
 
 	async refresh(): Promise<void> {
@@ -47,33 +50,7 @@ export class HabitGraphView extends ItemView {
 			return;
 		}
 
-		for (const task of habitTasks) {
-			const completionDates = this.plugin.tasksApi.getCompletionHistory(task);
-			const skippedDates = this.plugin.tasksApi.getSkippedDates(task);
-			const scheduledDate = parseISODateOrNull(task.scheduled);
-
-			const cells = GraphRenderer.generateDayCells(
-				completionDates,
-				this.plugin.settings.daysBeforeToday,
-				this.plugin.settings.daysAfterToday,
-				task.recurrence,
-				skippedDates,
-				task.recurrenceAnchor,
-				scheduledDate
-			);
-
-			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence, task.recurrenceAnchor, scheduledDate);
-
-			const graphEl = GraphRenderer.renderGraph(
-				cells,
-				task.title,
-				streak,
-				this.plugin.settings.showStreakCount,
-				() => openTaskNote(this.app, task.path)
-			);
-
-			container.appendChild(graphEl);
-		}
+		this.rows.render(container, habitTasks);
 	}
 
 	private renderEmpty(container: Element): void {

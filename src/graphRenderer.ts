@@ -221,6 +221,14 @@ export class GraphRenderer {
 	}
 
 	/**
+	 * Whether clicking a cell may record that day (#47): past days and
+	 * today can be backfilled; future days can't.
+	 */
+	static isCellClickable(cell: DayCell): boolean {
+		return !cell.isFuture;
+	}
+
+	/**
 	 * Color class(es) for a cell — status-driven; today additionally gets
 	 * the 'today' modifier, which tints the normal status color in place
 	 * (a baked-in overlay, see styles.css) so the current day stays
@@ -256,7 +264,8 @@ export class GraphRenderer {
 		habitName: string,
 		streak: number,
 		showStreak: boolean,
-		onLabelClick?: () => void
+		onLabelClick?: () => void,
+		onCellClick?: (cell: DayCell) => void
 	): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'habit-graph-row';
@@ -343,6 +352,13 @@ export class GraphRenderer {
 			const title = document.createElementNS(svgNS, 'title');
 			title.textContent = this.tooltipForCell(cell);
 			g.appendChild(title);
+
+			if (onCellClick && this.isCellClickable(cell)) {
+				// classList.add keeps the color class set above; same discard-on-
+				// re-render reasoning as the label listener
+				g.classList.add('clickable');
+				g.addEventListener('click', () => onCellClick(cell));
+			}
 
 			svg.appendChild(g);
 		}

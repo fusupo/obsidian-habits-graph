@@ -55,6 +55,23 @@
 	fill: transparent;
 }
 
+/* Past/today cells record a day through TaskNotes on click (#47). Hover is
+   an outline, not a CSS filter: WebKit ignores filter on SVG elements */
+.habit-graph-svg .clickable {
+	cursor: pointer;
+}
+
+.habit-graph-svg .clickable:hover rect {
+	stroke: var(--text-muted);
+	stroke-width: 1;
+}
+
+/* A click on this habit is still being written through TaskNotes */
+.habit-graph-row.habit-busy {
+	opacity: 0.6;
+	pointer-events: none;
+}
+
 .habit-graph-svg .blue rect { fill: #7aa6da; }
 .habit-graph-svg .blue text { fill: white; }
 

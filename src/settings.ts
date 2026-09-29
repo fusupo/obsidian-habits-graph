@@ -7,6 +7,7 @@ export interface HabitGraphSettings {
 	daysAfterToday: number;
 	showStreakCount: boolean;
 	taskFolderPath: string;
+	enableCellClickEdit: boolean;
 }
 
 export const DEFAULT_SETTINGS: HabitGraphSettings = {
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: HabitGraphSettings = {
 	daysAfterToday: 7,
 	showStreakCount: true,
 	taskFolderPath: '',
+	enableCellClickEdit: true,
 };
 
 export class HabitGraphSettingTab extends PluginSettingTab {
@@ -77,6 +79,16 @@ export class HabitGraphSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.showStreakCount)
 				.onChange(async (value) => {
 					this.plugin.settings.showStreakCount = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Click cells to record days')
+			.setDesc('Click a past or today cell to cycle it done → skipped → blank. Writes through the TaskNotes plugin.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableCellClickEdit)
+				.onChange(async (value) => {
+					this.plugin.settings.enableCellClickEdit = value;
 					await this.plugin.saveSettings();
 				}));
 

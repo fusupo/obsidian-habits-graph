@@ -2,11 +2,9 @@ import { Notice, Plugin, WorkspaceLeaf, MarkdownPostProcessorContext } from 'obs
 import { HabitGraphSettings, DEFAULT_SETTINGS, HabitGraphSettingTab } from './settings';
 import { TasksApiWrapper } from './tasksApi';
 import { HabitGraphView, VIEW_TYPE_HABIT_GRAPH } from './habitGraphView';
-import { GraphRenderer } from './graphRenderer';
 import { TaskCacheManager } from './cache/TaskCacheManager';
 import { VaultEventHandler } from './events/VaultEventHandler';
-import { openTaskNote } from './utils/noteOpener';
-import { parseISODateOrNull } from './utils/dateUtils';
+import { HabitGraphBlock } from './ui/habitGraphBlock';
 
 export default class OrgHabitsGraphPlugin extends Plugin {
 	settings: HabitGraphSettings;
@@ -164,47 +162,10 @@ export default class OrgHabitsGraphPlugin extends Plugin {
 	async renderHabitGraphCodeBlock(
 		_source: string,
 		el: HTMLElement,
-		_ctx: MarkdownPostProcessorContext
+		ctx: MarkdownPostProcessorContext
 	): Promise<void> {
-		const habitTasks = await this.tasksApi.getHabitTaskNotes(
-			this.settings.habitTag
-		);
-
-		if (habitTasks.length === 0) {
-			const emptyEl = el.createDiv({ cls: 'habit-graph-empty' });
-			emptyEl.createEl('h3', { text: 'No habits found' });
-			emptyEl.createEl('p', {
-				text: `Create markdown files with frontmatter containing tags: [${this.settings.habitTag}] and a recurrence field.`
-			});
-			return;
-		}
-
-		for (const task of habitTasks) {
-			const completionDates = this.tasksApi.getCompletionHistory(task);
-			const skippedDates = this.tasksApi.getSkippedDates(task);
-			const scheduledDate = parseISODateOrNull(task.scheduled);
-
-			const cells = GraphRenderer.generateDayCells(
-				completionDates,
-				this.settings.daysBeforeToday,
-				this.settings.daysAfterToday,
-				task.recurrence,
-				skippedDates,
-				task.recurrenceAnchor,
-				scheduledDate
-			);
-
-			const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence, task.recurrenceAnchor, scheduledDate);
-
-			const graphEl = GraphRenderer.renderGraph(
-				cells,
-				task.title,
-				streak,
-				this.settings.showStreakCount,
-				() => openTaskNote(this.app, task.path)
-			);
-
-			el.appendChild(graphEl);
-		}
+		const block = new HabitGraphBlock(el, this);
+		ctx.addChild(block);
+		await block.render();
 	}
 }
