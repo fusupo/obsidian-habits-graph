@@ -1,9 +1,9 @@
 import type OrgHabitsGraphPlugin from '../main';
 import type { TaskNote } from '../types';
-import { GraphRenderer } from '../graphRenderer';
+import { GraphRenderer, DayCell } from '../graphRenderer';
 import { openTaskNote } from '../utils/noteOpener';
 import { parseISODateOrNull } from '../utils/dateUtils';
-import { isDayClickInFlight } from '../tasknotes/taskNotesBridge';
+import { isDayClickInFlight, recordDayClick, resolveTaskNotesBridge } from '../tasknotes/taskNotesBridge';
 
 /**
  * Build one habit's row (label + graph). The single place a TaskNote is
@@ -28,13 +28,26 @@ export function buildHabitRow(plugin: OrgHabitsGraphPlugin, task: TaskNote): HTM
 
 	const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence, task.recurrenceAnchor, scheduledDate);
 
-	return GraphRenderer.renderGraph(
+	// Cells only look clickable when TaskNotes can record the day; the click
+	// itself checks again, since TaskNotes can be disabled after render
+	const canRecord = resolveTaskNotesBridge(plugin.app) !== null;
+	const onCellClick = canRecord
+		? (cell: DayCell) => {
+			row.addClass('habit-busy');
+			void recordDayClick(plugin.app, task.path, cell.date)
+				.finally(() => row.removeClass('habit-busy'));
+		}
+		: undefined;
+
+	const row = GraphRenderer.renderGraph(
 		cells,
 		task.title,
 		streak,
 		settings.showStreakCount,
-		() => openTaskNote(plugin.app, task.path)
+		() => openTaskNote(plugin.app, task.path),
+		onCellClick
 	);
+	return row;
 }
 
 // A click can make up to three TaskNotes writes (the day, plus a DTSTART
