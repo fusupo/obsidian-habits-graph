@@ -12,6 +12,7 @@ export interface DayCell {
 }
 
 export class GraphRenderer {
+	private static _patternCounter = 0;
 	/**
 	 * Generate array of day cells for the consistency graph
 	 * With org-mode style scheduling window for future days
@@ -281,14 +282,10 @@ export class GraphRenderer {
 		svg.setAttribute('width', '100%');
 		svg.setAttribute('height', '20');
 
-		// Diagonal-stripe pattern for today-overdue cells (see .red-bright in
-		// styles.css). Every svg carries its own copy under the same id: SVG
-		// resolves url(#id) to the first live match in the document, so each
-		// graph keeps working no matter which other rows get re-rendered or
-		// removed. Stripe colors come from CSS classes for theme awareness.
+		const patternId = `habit-overdue-stripes-${GraphRenderer._patternCounter++}`;
 		const defs = document.createElementNS(svgNS, 'defs');
 		const pattern = document.createElementNS(svgNS, 'pattern');
-		pattern.setAttribute('id', 'habit-today-overdue-stripes');
+		pattern.setAttribute('id', patternId);
 		pattern.setAttribute('width', '6');
 		pattern.setAttribute('height', '6');
 		pattern.setAttribute('patternUnits', 'userSpaceOnUse');
@@ -324,6 +321,9 @@ export class GraphRenderer {
 			rect.setAttribute('y', '0');
 			rect.setAttribute('width', `${cellWidthPct}%`);
 			rect.setAttribute('height', '20');
+			if (colorClass === 'red-bright') {
+				rect.style.fill = `url(#${patternId})`;
+			}
 			g.appendChild(rect);
 
 			const marker = this.markerForCell(cell);
