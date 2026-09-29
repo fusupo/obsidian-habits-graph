@@ -204,6 +204,22 @@ export class GraphRenderer {
 	}
 
 	/**
+	 * Hover text for a cell, e.g. "Fri 2026-09-18: Missed". Cell dates are
+	 * UTC-midnight, so the weekday must be read in UTC like the date string —
+	 * local time lands on the previous day at negative UTC offsets.
+	 */
+	static tooltipForCell(cell: DayCell): string {
+		const dateStr = this.dateToString(cell.date);
+		const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+		const statusText = cell.completed ? 'Done'
+			: cell.status === 'skipped' ? 'Skipped'
+			: cell.status === 'today-overdue' || cell.status === 'overdue' ? 'Overdue'
+			: (cell.status === 'rest' || cell.isFuture) ? 'Not due'
+			: 'Missed';
+		return `${dayName} ${dateStr}: ${statusText}`;
+	}
+
+	/**
 	 * Color class(es) for a cell — status-driven; today additionally gets
 	 * the 'today' modifier, which tints the normal status color in place
 	 * (a baked-in overlay, see styles.css) so the current day stays
@@ -325,14 +341,7 @@ export class GraphRenderer {
 			}
 
 			const title = document.createElementNS(svgNS, 'title');
-			const dateStr = this.dateToString(cell.date);
-			const dayName = cell.date.toLocaleDateString('en-US', { weekday: 'short' });
-			const statusText = cell.completed ? 'Done'
-				: cell.status === 'skipped' ? 'Skipped'
-				: cell.status === 'today-overdue' || cell.status === 'overdue' ? 'Overdue'
-				: (cell.status === 'rest' || cell.isFuture) ? 'Not due'
-				: 'Missed';
-			title.textContent = `${dayName} ${dateStr}: ${statusText}`;
+			title.textContent = this.tooltipForCell(cell);
 			g.appendChild(title);
 
 			svg.appendChild(g);
