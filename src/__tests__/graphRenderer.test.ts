@@ -716,6 +716,25 @@ describe('tooltipForCell — weekday read in UTC like the date', () => {
 	});
 });
 
+describe('isCellClickable — past and today can be backfilled, future cannot (#47)', () => {
+	const cells = GraphRenderer.generateDayCells([], 3, 3, 'FREQ=DAILY');
+
+	it('past cells are clickable', () => {
+		expect(cells.filter(c => c.isPast).every(c => GraphRenderer.isCellClickable(c))).toBe(true);
+	});
+
+	it('today is clickable', () => {
+		const today = cells.find(c => c.isToday)!;
+		expect(GraphRenderer.isCellClickable(today)).toBe(true);
+	});
+
+	it('future cells are not clickable', () => {
+		const future = cells.filter(c => c.isFuture);
+		expect(future.length).toBe(3);
+		expect(future.some(c => GraphRenderer.isCellClickable(c))).toBe(false);
+	});
+});
+
 describe('markerForCell — uniform glyphs, no today special-case (#33)', () => {
 	function makeCell(overrides: Partial<DayCell>): DayCell {
 		return {
