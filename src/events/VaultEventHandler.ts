@@ -14,11 +14,26 @@ import { parseTaskNoteFromFile } from '../utils/taskParser';
  * frontmatter is fully parsed before we read it.
  */
 export class VaultEventHandler {
+	private changeListeners = new Set<(path: string) => void>();
+
 	constructor(
 		private plugin: Plugin,
 		private cacheManager: TaskCacheManager,
 		private app: App
 	) {}
+
+	/**
+	 * Subscribe to a file's task data being re-cached. Fires after the cache
+	 * update, so listeners read fresh data from the cache.
+	 *
+	 * @returns unsubscribe function; pass it to a component's register()
+	 */
+	onTaskChanged(listener: (path: string) => void): () => void {
+		this.changeListeners.add(listener);
+		return () => {
+			this.changeListeners.delete(listener);
+		};
+	}
 
 	setupEventListeners(): void {
 		const { vault, metadataCache } = this.app;
@@ -57,6 +72,9 @@ export class VaultEventHandler {
 			this.cacheManager.setFileTasks(file.path, taskNote);
 		} else {
 			this.cacheManager.removeFile(file.path);
+		}
+		for (const listener of this.changeListeners) {
+			listener(file.path);
 		}
 	}
 
