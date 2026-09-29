@@ -699,6 +699,23 @@ describe('calculateStreak — monthly-bymonthday (#11)', () => {
 	});
 });
 
+describe('tooltipForCell — weekday read in UTC like the date', () => {
+	// Relies on jest.config.js pinning TZ=America/Los_Angeles: reading the
+	// UTC-midnight date in local time would say Thursday.
+	it('labels 2026-09-18 as Friday at a negative UTC offset', () => {
+		const cell: DayCell = {
+			date: parseISODate('2026-09-18'),
+			isToday: false,
+			isPast: true,
+			isFuture: false,
+			completed: false,
+			daysFromLastCompletion: 0,
+			status: 'missed',
+		};
+		expect(GraphRenderer.tooltipForCell(cell)).toBe('Fri 2026-09-18: Missed');
+	});
+});
+
 describe('markerForCell — uniform glyphs, no today special-case (#33)', () => {
 	function makeCell(overrides: Partial<DayCell>): DayCell {
 		return {
