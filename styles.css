@@ -29,6 +29,9 @@
 @media (max-width: 768px) {
 	.habit-label {
 		flex: 0 0 120px;
+		font-size: 0.75em;
+		overflow-x: auto;
+		text-overflow: clip;
 	}
 }
 
