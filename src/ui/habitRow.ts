@@ -30,7 +30,7 @@ export function buildHabitRow(plugin: OrgHabitsGraphPlugin, task: TaskNote): HTM
 
 	// Cells only look clickable when TaskNotes can record the day; the click
 	// itself checks again, since TaskNotes can be disabled after render
-	const canRecord = resolveTaskNotesBridge(plugin.app) !== null;
+	const canRecord = settings.enableCellClickEdit && resolveTaskNotesBridge(plugin.app) !== null;
 	const onCellClick = canRecord
 		? (cell: DayCell) => {
 			row.addClass('habit-busy');
