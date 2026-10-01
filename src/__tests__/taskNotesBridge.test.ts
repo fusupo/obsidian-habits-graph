@@ -17,6 +17,7 @@ jest.mock('obsidian', () => {
 
 const PATH = 'TaskNotes/habit.md';
 const INTERVAL_DAYS = 14;
+const TODAY = '2026-10-01'; // a Thursday
 
 interface FakeTask {
 	recurrence: string;
@@ -26,18 +27,85 @@ interface FakeTask {
 	scheduled: string;
 }
 
+/** Mon/Wed/Fri from its scheduled date (TaskNotes' default anchor). */
+const MWF_HABIT: Partial<FakeTask> = {
+	recurrence: 'DTSTART:20260703;FREQ=WEEKLY;BYDAY=MO,FR,WE',
+	recurrence_anchor: 'scheduled',
+	scheduled: '2026-09-30',
+};
+
+/** "Upper expander adjustment" as it was when #58 was found: Wed 9/30 missed. */
+const UPPER_EXPANDER: Partial<FakeTask> = {
+	...MWF_HABIT,
+	complete_instances: [
+		'2026-07-04', '2026-07-08', '2026-07-13', '2026-07-17', '2026-07-22', '2026-07-25', '2026-07-30',
+		'2026-08-01', '2026-08-25', '2026-08-29', '2026-09-02', '2026-09-08', '2026-09-12', '2026-09-17',
+	],
+	skipped_instances: [
+		'2026-07-06', '2026-07-10', '2026-07-15', '2026-07-20', '2026-07-27', '2026-08-03', '2026-08-05',
+		'2026-08-07', '2026-08-10', '2026-08-12', '2026-08-14', '2026-08-17', '2026-08-19', '2026-08-21',
+		'2026-08-26', '2026-08-31', '2026-09-04', '2026-09-09', '2026-09-14',
+	],
+};
+
+const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const shift = (iso: string, days: number) => formatISODate(addDays(parseISODate(iso), days));
+
 /**
- * In-memory stand-in for TaskNotes 4.13.6's recurring toggles, reproducing
- * the semantics the bridge depends on:
+ * Stand-in for TaskNotes' rrule expansion, deliberately independent of the
+ * plugin's isDueOn so tests can catch the two disagreeing. Handles
+ * FREQ=DAILY and FREQ=WEEKLY (with or without BYDAY), each with INTERVAL,
+ * counted from DTSTART; weeks start on Monday.
+ */
+function isOccurrence(recurrence: string, iso: string): boolean {
+	const start = recurrence.match(/DTSTART:(\d{4})(\d{2})(\d{2})/)!.slice(1).join('-');
+	if (iso < start) return false;
+	const param = (key: string) => recurrence.match(new RegExp(`${key}=([^;]+)`))?.[1];
+	const interval = Number(param('INTERVAL') ?? 1);
+	const startDate = parseISODate(start);
+	const date = parseISODate(iso);
+	const days = Math.round((date.getTime() - startDate.getTime()) / 86400000);
+
+	if (param('FREQ') === 'DAILY') return days % interval === 0;
+	if (param('FREQ') === 'WEEKLY') {
+		const byDay = param('BYDAY')?.split(',') ?? [WEEKDAYS[startDate.getUTCDay()]];
+		const weeks = Math.floor((days + ((startDate.getUTCDay() + 6) % 7)) / 7);
+		return byDay.includes(WEEKDAYS[date.getUTCDay()]) && weeks % interval === 0;
+	}
+	throw new Error(`fake TaskNotes can't expand ${recurrence}`);
+}
+
+/** TaskNotes' `$Ue`: how far back a toggle looks for a missed due day. */
+function lookBackDays(recurrence: string): number {
+	const interval = Number(recurrence.match(/INTERVAL=(\d+)/)?.[1] ?? 1);
+	if (recurrence.includes('FREQ=DAILY')) return Math.max(30, interval * 2);
+	if (recurrence.includes('FREQ=WEEKLY')) return Math.max(90, interval * 14);
+	return 365;
+}
+
+type ConfirmClearInstances = (instances: { complete: string[]; skipped: string[] }) => Promise<boolean>;
+
+/**
+ * In-memory stand-in for TaskNotes 4.13.6's task service, reproducing the
+ * semantics the bridge depends on:
+ * - the date a toggle acts on (`fce`/`UUe`): the exact date for completion-
+ *   anchored habits and for due days; for an off day of any other habit,
+ *   the latest due day in the look-back window that isn't done or skipped,
+ *   else the next one (#58)
  * - complete toggle: flips membership, always drops the date from skipped,
  *   and on ADD with anchor 'completion' rewrites DTSTART to that date
  *   (even an older one); removal never reverts DTSTART
  * - skip toggle: flips membership; on ADD drops the date from complete;
  *   never touches the recurrence
- * - `scheduled` is derived from DTSTART, like TaskNotes' completion-anchor
- *   next-occurrence math
+ * - `scheduled` after a toggle: for anchor 'completion', derived from
+ *   DTSTART; otherwise the first due day on or after the later of the
+ *   toggled day and today that isn't done or skipped (`Cd`), keeping any
+ *   time suffix
+ * - updateProperty: writes the value as given, except that moving
+ *   `scheduled` deletes every instance on or after the new date, unless
+ *   `confirmClearInstances` resolves false, which cancels the write
  */
-function makeFakeTaskNotes(initial: Partial<FakeTask> = {}) {
+function makeFakeTaskNotes(initial: Partial<FakeTask> = {}, today = TODAY) {
 	const task: FakeTask = {
 		recurrence: 'DTSTART:20260101;FREQ=WEEKLY;INTERVAL=2',
 		recurrence_anchor: 'completion',
@@ -46,15 +114,45 @@ function makeFakeTaskNotes(initial: Partial<FakeTask> = {}) {
 		scheduled: '2026-01-15',
 		...initial,
 	};
+	task.complete_instances = [...task.complete_instances];
+	task.skipped_instances = [...task.skipped_instances];
 
 	const dtstart = () => task.recurrence.match(/DTSTART:(\d{4})(\d{2})(\d{2})/)!.slice(1).join('-');
-	const rescheduled = () => {
-		task.scheduled = formatISODate(addDays(parseISODate(dtstart()), INTERVAL_DAYS));
+	const handled = () => new Set([...task.complete_instances, ...task.skipped_instances]);
+
+	const actionDate = (iso: string): string => {
+		if (task.recurrence_anchor === 'completion' || isOccurrence(task.recurrence, iso)) return iso;
+		const done = handled();
+		for (let back = 1; back <= lookBackDays(task.recurrence); back++) {
+			const earlier = shift(iso, -back);
+			if (isOccurrence(task.recurrence, earlier) && !done.has(earlier)) return earlier;
+		}
+		for (let ahead = 1; ahead <= 400; ahead++) {
+			const later = shift(iso, ahead);
+			if (isOccurrence(task.recurrence, later) && !done.has(later)) return later;
+		}
+		return iso;
+	};
+
+	const rescheduled = (toggled: string) => {
+		if (task.recurrence_anchor === 'completion') {
+			task.scheduled = formatISODate(addDays(parseISODate(dtstart()), INTERVAL_DAYS));
+			return;
+		}
+		const from = toggled > today ? toggled : today;
+		const done = handled();
+		for (let ahead = 0; ahead <= 400; ahead++) {
+			const candidate = shift(from, ahead);
+			if (isOccurrence(task.recurrence, candidate) && !done.has(candidate)) {
+				task.scheduled = `${candidate}${task.scheduled.slice(10)}`;
+				return;
+			}
+		}
 	};
 
 	const toggleComplete = jest.fn(async (ref: { path: string }, date: Date) => {
 		expect(ref.path).toBe(PATH);
-		const d = formatISODate(date);
+		const d = actionDate(formatISODate(date));
 		task.skipped_instances = task.skipped_instances.filter(x => x !== d);
 		if (task.complete_instances.includes(d)) {
 			task.complete_instances = task.complete_instances.filter(x => x !== d);
@@ -64,31 +162,60 @@ function makeFakeTaskNotes(initial: Partial<FakeTask> = {}) {
 				task.recurrence = task.recurrence.replace(/DTSTART:[^;]+/, `DTSTART:${d.replace(/-/g, '')}`);
 			}
 		}
-		rescheduled();
+		rescheduled(d);
 	});
 	const toggleSkipped = jest.fn(async (ref: { path: string }, date: Date) => {
 		expect(ref.path).toBe(PATH);
-		const d = formatISODate(date);
+		const d = actionDate(formatISODate(date));
 		if (task.skipped_instances.includes(d)) {
 			task.skipped_instances = task.skipped_instances.filter(x => x !== d);
 		} else {
 			task.skipped_instances = [...task.skipped_instances, d];
 			task.complete_instances = task.complete_instances.filter(x => x !== d);
 		}
-		rescheduled();
+		rescheduled(d);
 	});
 	const toggleCompleteWithOccurrenceNotes = jest.fn((ref: { path: string }, date: Date) => toggleComplete(ref, date));
 
+	const updateProperty = jest.fn(async (
+		ref: { path: string },
+		property: string,
+		value: unknown,
+		options: { confirmClearInstances?: ConfirmClearInstances } = {}
+	) => {
+		expect(ref.path).toBe(PATH);
+		if (property === 'complete_instances' || property === 'skipped_instances') {
+			task[property] = [...(value as string[])];
+			return;
+		}
+		if (property !== 'scheduled') throw new Error(`fake updateProperty can't write ${property}`);
+
+		const next = String(value);
+		const newDate = next.slice(0, 10);
+		if (task.scheduled.slice(0, 10) !== newDate) {
+			const complete = task.complete_instances.filter(d => d >= newDate);
+			const skipped = task.skipped_instances.filter(d => d >= newDate);
+			if (complete.length > 0 || skipped.length > 0) {
+				if (options.confirmClearInstances && !(await options.confirmClearInstances({ complete, skipped }))) return;
+				task.complete_instances = task.complete_instances.filter(d => d < newDate);
+				task.skipped_instances = task.skipped_instances.filter(d => d < newDate);
+			}
+		}
+		task.scheduled = next;
+	});
+
+	const service = {
+		toggleRecurringTaskCompleteWithOccurrenceNotes: toggleCompleteWithOccurrenceNotes,
+		toggleRecurringTaskComplete: toggleComplete,
+		toggleRecurringTaskSkipped: toggleSkipped,
+		updateProperty,
+	};
 	const bridge: TaskNotesBridge = {
-		service: {
-			toggleRecurringTaskCompleteWithOccurrenceNotes: toggleCompleteWithOccurrenceNotes,
-			toggleRecurringTaskComplete: toggleComplete,
-			toggleRecurringTaskSkipped: toggleSkipped,
-		},
+		service,
 		getTaskInfo: async (path) => (path === PATH ? structuredCloneTask(task) : null),
 	};
 
-	return { task, bridge, toggleComplete, toggleSkipped, toggleCompleteWithOccurrenceNotes, dtstart };
+	return { task, bridge, toggleComplete, toggleSkipped, toggleCompleteWithOccurrenceNotes, updateProperty, dtstart };
 }
 
 function structuredCloneTask(task: FakeTask): TaskNotesTaskState & FakeTask {
@@ -155,9 +282,55 @@ describe('resolveTaskNotesBridge — shape-checked access to TaskNotes internals
 	});
 });
 
+describe('fake TaskNotes — matches 4.13.6 where #58 depends on it', () => {
+	it('a toggle on an off day of a scheduled-anchor habit lands on the latest missed due day', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		await fake.bridge.service.toggleRecurringTaskCompleteWithOccurrenceNotes({ path: PATH }, day('2026-10-01'));
+		expect(fake.task.complete_instances).toContain('2026-09-30');
+		expect(fake.task.complete_instances).not.toContain('2026-10-01');
+		expect(fake.task.scheduled).toBe('2026-10-02');
+	});
+
+	it('toggling the same off day again walks back to the next missed due day', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		await fake.bridge.service.toggleRecurringTaskComplete({ path: PATH }, day('2026-10-01'));
+		await fake.bridge.service.toggleRecurringTaskComplete({ path: PATH }, day('2026-10-01'));
+		expect(fake.task.complete_instances.slice(-2)).toEqual(['2026-09-30', '2026-09-28']);
+	});
+
+	it('skips move the same way', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		await fake.bridge.service.toggleRecurringTaskSkipped({ path: PATH }, day('2026-10-01'));
+		expect(fake.task.skipped_instances).toContain('2026-09-30');
+	});
+
+	it('due days and completion-anchored habits keep the exact date', async () => {
+		const scheduled = makeFakeTaskNotes(UPPER_EXPANDER);
+		await scheduled.bridge.service.toggleRecurringTaskComplete({ path: PATH }, day('2026-09-28'));
+		expect(scheduled.task.complete_instances).toContain('2026-09-28');
+
+		const completion = makeFakeTaskNotes({ ...UPPER_EXPANDER, recurrence_anchor: 'completion' });
+		await completion.bridge.service.toggleRecurringTaskComplete({ path: PATH }, day('2026-10-01'));
+		expect(completion.task.complete_instances).toContain('2026-10-01');
+	});
+
+	it('moving scheduled with updateProperty deletes later instances unless refused', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, scheduled: '2026-10-05', complete_instances: ['2026-09-28', '2026-10-02'] });
+		const service = fake.bridge.service as unknown as { updateProperty: typeof fake.updateProperty };
+
+		await service.updateProperty({ path: PATH }, 'scheduled', '2026-09-30', { confirmClearInstances: async () => false });
+		expect(fake.task.scheduled).toBe('2026-10-05');
+		expect(fake.task.complete_instances).toEqual(['2026-09-28', '2026-10-02']);
+
+		await service.updateProperty({ path: PATH }, 'scheduled', '2026-09-30');
+		expect(fake.task.scheduled).toBe('2026-09-30');
+		expect(fake.task.complete_instances).toEqual(['2026-09-28']);
+	});
+});
+
 describe('cycleDay — one click through TaskNotes', () => {
 	it('cycles a day blank → done → skipped → blank', async () => {
-		const fake = makeFakeTaskNotes({ recurrence_anchor: 'scheduled' });
+		const fake = makeFakeTaskNotes(MWF_HABIT);
 
 		await cycleDay(fake.bridge, PATH, day('2026-09-18'));
 		expect(fake.task.complete_instances).toEqual(['2026-09-18']);
@@ -172,7 +345,7 @@ describe('cycleDay — one click through TaskNotes', () => {
 	});
 
 	it('completes with the occurrence-notes toggle and skips with the skip toggle', async () => {
-		const fake = makeFakeTaskNotes({ recurrence_anchor: 'scheduled' });
+		const fake = makeFakeTaskNotes(MWF_HABIT);
 		await cycleDay(fake.bridge, PATH, day('2026-09-18'));
 		await cycleDay(fake.bridge, PATH, day('2026-09-18'));
 		expect(fake.toggleCompleteWithOccurrenceNotes).toHaveBeenCalledTimes(1);
@@ -180,7 +353,7 @@ describe('cycleDay — one click through TaskNotes', () => {
 	});
 
 	it('passes the cell date through unchanged (UTC midnight, TZ pinned negative)', async () => {
-		const fake = makeFakeTaskNotes({ recurrence_anchor: 'scheduled' });
+		const fake = makeFakeTaskNotes(MWF_HABIT);
 		const cellDate = day('2026-09-18');
 		await cycleDay(fake.bridge, PATH, cellDate);
 		expect(fake.toggleCompleteWithOccurrenceNotes.mock.calls[0][1].getTime()).toBe(cellDate.getTime());
@@ -210,9 +383,9 @@ describe('cycleDay — one click through TaskNotes', () => {
 	});
 
 	it('never repairs scheduled-anchor habits', async () => {
-		const fake = makeFakeTaskNotes({ recurrence_anchor: 'scheduled', complete_instances: ['2026-09-20'] });
-		await cycleDay(fake.bridge, PATH, day('2026-09-06'));
-		expect(fake.dtstart()).toBe('2026-01-01');
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, complete_instances: ['2026-09-21'] });
+		await cycleDay(fake.bridge, PATH, day('2026-09-07')); // an older due day
+		expect(fake.dtstart()).toBe('2026-07-03');
 		expect(fake.toggleComplete).toHaveBeenCalledTimes(1);
 	});
 
@@ -244,7 +417,7 @@ describe('cycleDay — one click through TaskNotes', () => {
 	});
 
 	it('drops a second click on a habit that is still being written', async () => {
-		const fake = makeFakeTaskNotes({ recurrence_anchor: 'scheduled' });
+		const fake = makeFakeTaskNotes(MWF_HABIT);
 		let release!: () => void;
 		fake.toggleCompleteWithOccurrenceNotes.mockImplementationOnce(
 			() => new Promise<void>(resolve => { release = resolve; })
@@ -292,7 +465,7 @@ describe('cycleDay — final state does not depend on click order', () => {
 
 describe('recordDayClick — click handler with notices', () => {
 	function makeTaskNotesApp() {
-		const fake = makeFakeTaskNotes({ recurrence_anchor: 'scheduled' });
+		const fake = makeFakeTaskNotes(MWF_HABIT);
 		const app = makeApp({
 			taskService: fake.bridge.service,
 			cacheManager: { getTaskInfo: fake.bridge.getTaskInfo },
