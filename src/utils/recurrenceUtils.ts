@@ -5,7 +5,7 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
  * and split semicolon-delimited RRULE params into an uppercased map.
  * Returns null if the string is not an RRULE (no FREQ= present).
  */
-function parseRRuleParams(pattern: string): Record<string, string> | null {
+export function parseRRuleParams(pattern: string): Record<string, string> | null {
 	const rruleStr = pattern.trim().replace(/^DTSTART:[^;]*;?/i, '');
 	if (!rruleStr.toUpperCase().includes('FREQ=')) return null;
 
