@@ -59,6 +59,8 @@ Example after completion:
 
 Click (or tap) a past or today cell to cycle that day: **done → skipped → blank**. Each click is written through the [TaskNotes](https://github.com/callumalpass/tasknotes) plugin, so TaskNotes keeps `scheduled` and the recurrence up to date. The order you click days in doesn't matter. Future cells can't be clicked, and cells stay inert if TaskNotes isn't installed.
 
+On a habit with fixed due days (say Mon/Wed/Fri) that repeats from its scheduled date, clicking a day that isn't due records exactly that day, and `scheduled` moves to the next due day. Clearing a day you marked by mistake puts `scheduled` back on the due day you still owe. The notice after each click always names the day that was actually written.
+
 ## Graph Explanation
 
 Each habit shows a consistency graph with:
