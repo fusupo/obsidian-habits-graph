@@ -50,8 +50,9 @@ export function buildHabitRow(plugin: OrgHabitsGraphPlugin, task: TaskNote): HTM
 	return row;
 }
 
-// A click can make up to three TaskNotes writes (the day, plus a DTSTART
-// repair's off-then-on); delaying the re-render collapses them into one
+// A click can make several TaskNotes writes (the day plus a DTSTART repair's
+// off-then-on, or an off day's lists plus `scheduled`); delaying the
+// re-render, and waiting out a click in flight, collapses them into one
 const RERENDER_DELAY_MS = 100;
 
 /**

@@ -269,6 +269,12 @@ describe('resolveTaskNotesBridge — shape-checked access to TaskNotes internals
 		expect(resolveTaskNotesBridge(makeApp({ taskService: fullService(), cacheManager: {} }))).toBeNull();
 	});
 
+	it('still resolves without updateProperty: due days can be recorded without it', () => {
+		const bridge = resolveTaskNotesBridge(makeApp({ taskService: fullService(), cacheManager: { getTaskInfo: jest.fn() } }));
+		expect(bridge).not.toBeNull();
+		expect(bridge!.service.updateProperty).toBeUndefined();
+	});
+
 	it('calls getTaskInfo with cacheManager as `this`', async () => {
 		const cacheManager = {
 			tasks: { [PATH]: { recurrence: 'FREQ=DAILY' } } as Record<string, TaskNotesTaskState>,
@@ -726,6 +732,37 @@ describe('recordDayClick — click handler with notices', () => {
 		expect(result).toMatchObject({ status: 'done', matchedClick: false });
 		expect(Notice).toHaveBeenCalledWith('Clicked 2026-09-21, but TaskNotes marked 2026-09-14 done instead. Click 2026-09-14 to change it.');
 		warn.mockRestore();
+	});
+
+	describe('a TaskNotes without updateProperty', () => {
+		function makeAppWithoutUpdateProperty() {
+			const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+			const { updateProperty: _unavailable, ...taskService } = fake.bridge.service;
+			const app = makeApp({ taskService, cacheManager: { getTaskInfo: fake.bridge.getTaskInfo } });
+			return { fake, app };
+		}
+
+		it('refuses an off day and writes nothing (never falls back to the toggles)', async () => {
+			const { fake, app } = makeAppWithoutUpdateProperty();
+			const before = structuredCloneTask(fake.task);
+
+			const result = await recordDayClick(app, PATH, day('2026-10-01'), day(TODAY));
+
+			expect(result).toMatchObject({ status: 'error' });
+			expect(Notice).toHaveBeenCalledWith(
+				"Couldn't record 2026-10-01: it isn't a due day for this habit, and this TaskNotes version can't write an exact date. Nothing was written"
+			);
+			expect(fake.task).toEqual(before);
+			expect(fake.toggleCompleteWithOccurrenceNotes).not.toHaveBeenCalled();
+			expect(fake.toggleSkipped).not.toHaveBeenCalled();
+		});
+
+		it('still records a due day', async () => {
+			const { fake, app } = makeAppWithoutUpdateProperty();
+			await recordDayClick(app, PATH, day('2026-09-30'), day(TODAY));
+			expect(fake.task.complete_instances).toContain('2026-09-30');
+			expect(Notice).toHaveBeenCalledWith('Marked 2026-09-30 done');
+		});
 	});
 
 	it('shows the error in a notice', async () => {
