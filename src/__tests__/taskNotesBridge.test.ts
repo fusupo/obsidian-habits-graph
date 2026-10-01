@@ -341,7 +341,14 @@ describe('cycleDay — one click through TaskNotes', () => {
 
 		const last = await cycleDay(fake.bridge, PATH, day('2026-09-18'));
 		expect(fake.task.skipped_instances).toEqual([]);
-		expect(last).toEqual({ status: 'done', action: 'unskip', dateStr: '2026-09-18', repairedDate: null });
+		expect(last).toEqual({
+			status: 'done',
+			action: 'unskip',
+			dateStr: '2026-09-18',
+			repairedDate: null,
+			matchedClick: true,
+			message: 'Marked 2026-09-18 cleared',
+		});
 	});
 
 	it('completes with the occurrence-notes toggle and skips with the skip toggle', async () => {
@@ -364,7 +371,14 @@ describe('cycleDay — one click through TaskNotes', () => {
 
 		const result = await cycleDay(fake.bridge, PATH, day('2026-09-06'));
 
-		expect(result).toEqual({ status: 'done', action: 'complete', dateStr: '2026-09-06', repairedDate: '2026-09-20' });
+		expect(result).toEqual({
+			status: 'done',
+			action: 'complete',
+			dateStr: '2026-09-06',
+			repairedDate: '2026-09-20',
+			matchedClick: true,
+			message: 'Marked 2026-09-06 done',
+		});
 		expect(fake.dtstart()).toBe('2026-09-20');
 		expect(fake.task.complete_instances.sort()).toEqual(['2026-09-06', '2026-09-20']);
 		expect(fake.toggleCompleteWithOccurrenceNotes).toHaveBeenCalledTimes(1);
@@ -488,6 +502,22 @@ describe('recordDayClick — click handler with notices', () => {
 			'Marked 2026-09-18 skipped',
 			'Marked 2026-09-18 cleared',
 		]);
+	});
+
+	it('names the day TaskNotes really wrote when it moved the click', async () => {
+		// Every other Monday: the plugin reads it as every Monday (it doesn't
+		// model INTERVAL with BYDAY), TaskNotes doesn't. 9/21 is an off-week
+		// Monday, so TaskNotes moves the click to Mon 9/14
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const fake = makeFakeTaskNotes({ recurrence: 'DTSTART:20260706;FREQ=WEEKLY;INTERVAL=2;BYDAY=MO', recurrence_anchor: 'scheduled', scheduled: '2026-09-28' });
+		const app = makeApp({ taskService: fake.bridge.service, cacheManager: { getTaskInfo: fake.bridge.getTaskInfo } });
+
+		const result = await recordDayClick(app, PATH, day('2026-09-21'));
+
+		expect(fake.task.complete_instances).toEqual(['2026-09-14']);
+		expect(result).toMatchObject({ status: 'done', matchedClick: false });
+		expect(Notice).toHaveBeenCalledWith('Clicked 2026-09-21, but TaskNotes marked 2026-09-14 done instead. Click 2026-09-14 to change it.');
+		warn.mockRestore();
 	});
 
 	it('shows the error in a notice', async () => {

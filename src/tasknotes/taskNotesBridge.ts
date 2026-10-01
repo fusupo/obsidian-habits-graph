@@ -2,6 +2,10 @@ import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import { formatISODate, parseISODate } from '../utils/dateUtils';
 import { dtstartRepairDate } from '../utils/completionAnchorRepair';
+import { describeOutcome, diffInstances } from '../utils/instanceDiff';
+import type { CycleAction, ScheduleState } from '../utils/scheduledAnchor';
+
+export type { CycleAction };
 
 /**
  * Bridge to the TaskNotes plugin for recording a day on a habit (#47).
@@ -24,12 +28,7 @@ export interface TaskNotesService {
 }
 
 /** The TaskNotes TaskInfo fields this bridge reads (TaskNotes' snake_case names). */
-export interface TaskNotesTaskState {
-	recurrence?: unknown;
-	recurrence_anchor?: unknown;
-	complete_instances?: unknown;
-	skipped_instances?: unknown;
-}
+export type TaskNotesTaskState = ScheduleState;
 
 export interface TaskNotesBridge {
 	service: TaskNotesService;
@@ -69,9 +68,6 @@ export function resolveTaskNotesBridge(app: App): TaskNotesBridge | null {
 	};
 }
 
-/** What a click on a day does, given that day's current state. */
-export type CycleAction = 'complete' | 'skip' | 'unskip';
-
 function includesDate(list: unknown, dateStr: string): boolean {
 	return Array.isArray(list) && list.includes(dateStr);
 }
@@ -88,7 +84,16 @@ export function nextCycleAction(state: TaskNotesTaskState, dateStr: string): Cyc
 }
 
 export type CycleResult =
-	| { status: 'done'; action: CycleAction; dateStr: string; repairedDate: string | null }
+	| {
+			status: 'done';
+			action: CycleAction;
+			dateStr: string;
+			repairedDate: string | null;
+			/** True when the clicked day is the only day that changed. */
+			matchedClick: boolean;
+			/** What was actually written, for the notice. */
+			message: string;
+	  }
 	| { status: 'busy' }
 	| { status: 'error'; message: string };
 
@@ -130,6 +135,9 @@ export async function cycleDay(bridge: TaskNotesBridge, path: string, date: Date
 		}
 
 		const after = await bridge.getTaskInfo(path);
+		// Report what TaskNotes wrote, not what the click asked for. The
+		// repair below is net-zero on the lists
+		const outcome = describeOutcome(dateStr, diffInstances(before, after ?? {}));
 		const repairedDate = after
 			? dtstartRepairDate(after.recurrence_anchor, after.recurrence, after.complete_instances)
 			: null;
@@ -142,7 +150,7 @@ export async function cycleDay(bridge: TaskNotesBridge, path: string, date: Date
 			await bridge.service.toggleRecurringTaskComplete(task, repairDate);
 			await bridge.service.toggleRecurringTaskComplete(task, repairDate);
 		}
-		return { status: 'done', action, dateStr, repairedDate };
+		return { status: 'done', action, dateStr, repairedDate, matchedClick: outcome.matchedClick, message: outcome.message };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		return {
@@ -155,12 +163,6 @@ export async function cycleDay(bridge: TaskNotesBridge, path: string, date: Date
 		inFlight.delete(path);
 	}
 }
-
-const ACTION_LABEL: Record<CycleAction, string> = {
-	complete: 'done',
-	skip: 'skipped',
-	unskip: 'cleared',
-};
 
 /**
  * Click handler body for a graph cell: resolve TaskNotes, cycle the day and
@@ -175,7 +177,7 @@ export async function recordDayClick(app: App, path: string, date: Date): Promis
 
 	const result = await cycleDay(bridge, path, date);
 	if (result.status === 'done') {
-		new Notice(`Marked ${result.dateStr} ${ACTION_LABEL[result.action]}`);
+		new Notice(result.message);
 	} else if (result.status === 'error') {
 		new Notice(`Couldn't record ${formatISODate(date)}: ${result.message}`);
 	}
