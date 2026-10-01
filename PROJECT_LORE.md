@@ -37,6 +37,7 @@ make a wrong choice without this?
 - Never use TaskNotes' `taskService.updateTask` to write the instance lists; use `updateProperty` — *why: updateTask's frontmatter mapping skips an empty `skipped_instances` (so the last skip can't be cleared), and it also re-normalizes tags, can inject DTSTART and handles title/status (#58)*
 - When the plugin moves `scheduled` (off-day click or undo), `due` is NOT shifted, although TaskNotes' toggles keep the due offset (`maintainDueDateOffsetInRecurring`) — *why: reading that setting means relying on another undocumented internal; the user chose to leave `due` alone, so habits that have a `due` date will drift (#58)*
 - Un-marking the ONLY remaining completion of a `recurrence_anchor: completion` habit leaves DTSTART (and so `scheduled`) on the old date — known TaskNotes behavior, not a cycleDay bug — *why: the DTSTART repair needs a completion to re-mark and none is left; fixing it means reimplementing TaskNotes' recurrence math, which the taskNotesBridge coupling forbids, so don't chase it (#47)*
+- TaskNotes' source is only available as the minified bundle `../tasknotes/main.js` (~4.5 MB, mangled names like `fce`/`UUe`/`yce`/`Cd`); ugrep refuses regexes over it ("exceeds complexity limits") and `grep -oE '.{0,200}name.{0,400}'` hangs — *why: verifying the fake against real TaskNotes means reading this file; search it with python (`re.finditer` on the name, then print `s[i-200:i+400]`), which returns instantly (#58)*
 
 ## Glossary
 
@@ -56,3 +57,5 @@ make a wrong choice without this?
 - any new status that can appear on a non-call-to-action today needs a matching `.X.today rect` fill pair in styles.css (both themes), or today renders untinted on that status — *why: the tint went from a generic CSS brightness filter to an exhaustive per-base enumeration in #41 because WebKit ignores CSS filter on SVG elements; do not "simplify" back to brightness(); note that `'overdue'` and `'missed-overdue'` (#43) are past-only by construction — today's carry-over reuses existing `'today-overdue'` so no new today-tint pair is needed*
 
 ## Do-not-touch
+
+- `isScheduleModeled` (src/utils/scheduledAnchor.ts) must keep requiring an explicit `DTSTART` in the recurrence string — *why: with no DTSTART, TaskNotes uses `scheduled` as the implicit start and counts occurrences from it, so the plugin moving `scheduled` would shift every due day of an interval habit; for those rules the exact date is written and `scheduled` is left alone (#58)*
