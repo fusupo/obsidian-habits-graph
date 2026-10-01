@@ -345,6 +345,7 @@ describe('cycleDay — one click through TaskNotes', () => {
 			status: 'done',
 			action: 'unskip',
 			dateStr: '2026-09-18',
+			writePath: 'toggle',
 			repairedDate: null,
 			matchedClick: true,
 			message: 'Marked 2026-09-18 cleared',
@@ -375,6 +376,7 @@ describe('cycleDay — one click through TaskNotes', () => {
 			status: 'done',
 			action: 'complete',
 			dateStr: '2026-09-06',
+			writePath: 'toggle',
 			repairedDate: '2026-09-20',
 			matchedClick: true,
 			message: 'Marked 2026-09-06 done',
@@ -441,6 +443,139 @@ describe('cycleDay — one click through TaskNotes', () => {
 		await expect(cycleDay(fake.bridge, PATH, day('2026-09-19'))).resolves.toEqual({ status: 'busy' });
 		release();
 		await expect(first).resolves.toMatchObject({ status: 'done' });
+	});
+});
+
+describe('cycleDay — off days of scheduled-anchor habits are written exactly (#58)', () => {
+	const writtenProperties = (fake: ReturnType<typeof makeFakeTaskNotes>) => fake.updateProperty.mock.calls.map(c => c[1]);
+	const noToggles = (fake: ReturnType<typeof makeFakeTaskNotes>) => {
+		expect(fake.toggleCompleteWithOccurrenceNotes).not.toHaveBeenCalled();
+		expect(fake.toggleComplete).not.toHaveBeenCalled();
+		expect(fake.toggleSkipped).not.toHaveBeenCalled();
+	};
+
+	it('records Thu 10/1 as 10/1, not the missed Wednesday, and moves scheduled to Fri', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+
+		const result = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+
+		expect(fake.task.complete_instances).toContain('2026-10-01');
+		expect(fake.task.complete_instances).not.toContain('2026-09-30');
+		expect(fake.task.scheduled).toBe('2026-10-02');
+		expect(result).toMatchObject({ status: 'done', action: 'complete', matchedClick: true, message: 'Marked 2026-10-01 done' });
+		noToggles(fake);
+		expect(writtenProperties(fake)).toEqual(['complete_instances', 'scheduled']); // lists first, scheduled last
+	});
+
+	it('refuses to let a scheduled move delete anything', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+		const [, , , options] = fake.updateProperty.mock.calls[1];
+		await expect(options!.confirmClearInstances!({ complete: ['2026-10-05'], skipped: [] })).resolves.toBe(false);
+	});
+
+	it('cycles an off day done → skipped → blank on that same day', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		const original = { complete: [...fake.task.complete_instances], skipped: [...fake.task.skipped_instances] };
+
+		await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+		const skip = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+		expect(fake.task.complete_instances).toEqual(original.complete);
+		expect(fake.task.skipped_instances).toEqual([...original.skipped, '2026-10-01']);
+		expect(skip).toMatchObject({ action: 'skip', message: 'Marked 2026-10-01 skipped' });
+
+		const clear = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+		expect(fake.task.complete_instances).toEqual(original.complete);
+		expect(fake.task.skipped_instances).toEqual(original.skipped);
+		expect(clear).toMatchObject({ action: 'unskip', message: 'Marked 2026-10-01 cleared' });
+		noToggles(fake);
+	});
+
+	it('due days still go through the toggles', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		await cycleDay(fake.bridge, PATH, day('2026-09-30'), day(TODAY));
+		expect(fake.task.complete_instances).toContain('2026-09-30');
+		expect(fake.toggleCompleteWithOccurrenceNotes).toHaveBeenCalledTimes(1);
+		expect(fake.updateProperty).not.toHaveBeenCalled();
+	});
+
+	it('completion-anchored habits still go through the toggles on any day', async () => {
+		const fake = makeFakeTaskNotes({ ...UPPER_EXPANDER, recurrence_anchor: 'completion' });
+		await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+		expect(fake.task.complete_instances).toContain('2026-10-01');
+		expect(fake.updateProperty).not.toHaveBeenCalled();
+	});
+
+	it('leaves scheduled alone when later days are already marked, and says so', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, complete_instances: ['2026-10-05'] });
+
+		const result = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+
+		expect(fake.task.complete_instances).toEqual(['2026-10-05', '2026-10-01']);
+		expect(fake.task.scheduled).toBe('2026-09-30');
+		expect(result).toMatchObject({
+			status: 'done',
+			message: 'Marked 2026-10-01 done; scheduled stays 2026-09-30 because later days are already marked',
+		});
+	});
+
+	it('keeps a time on scheduled', async () => {
+		const fake = makeFakeTaskNotes({ ...UPPER_EXPANDER, scheduled: '2026-09-30T09:00' });
+		await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+		expect(fake.task.scheduled).toBe('2026-10-02T09:00');
+	});
+
+	it('writes the exact date but leaves scheduled alone for a rule it does not model', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR' });
+
+		const result = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+
+		expect(fake.task.complete_instances).toEqual(['2026-10-01']);
+		expect(fake.task.scheduled).toBe('2026-09-30');
+		expect(writtenProperties(fake)).toEqual(['complete_instances']);
+		expect(result).toMatchObject({ message: 'Marked 2026-10-01 done; scheduled left as is for this repeat rule' });
+	});
+
+	it('puts the lists back when a write fails halfway', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, complete_instances: ['2026-10-01'] });
+		const write = fake.updateProperty.getMockImplementation()!;
+		fake.updateProperty
+			.mockImplementationOnce(write) // complete_instances: drop 10/1
+			.mockRejectedValueOnce(new Error('disk full')); // skipped_instances: add 10/1
+
+		const result = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+
+		expect(result).toEqual({ status: 'error', message: 'disk full; nothing was changed' });
+		expect(fake.task.complete_instances).toEqual(['2026-10-01']);
+		expect(fake.task.skipped_instances).toEqual([]);
+	});
+
+	it('records the day even when moving scheduled fails, and says so', async () => {
+		const fake = makeFakeTaskNotes(UPPER_EXPANDER);
+		const write = fake.updateProperty.getMockImplementation()!;
+		fake.updateProperty
+			.mockImplementationOnce(write)
+			.mockRejectedValueOnce(new Error('disk full'));
+
+		const result = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+
+		expect(fake.task.complete_instances).toContain('2026-10-01');
+		expect(result).toMatchObject({ status: 'done', message: "Marked 2026-10-01 done; couldn't move scheduled: disk full" });
+	});
+
+	it('puts back days that TaskNotes deleted while moving scheduled', async () => {
+		// A TaskNotes that ignores the refusal and deletes days after the new scheduled
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, complete_instances: ['2026-10-05'] });
+		const write = fake.updateProperty.getMockImplementation()!;
+		fake.updateProperty.mockImplementation((ref, property, value) => write(ref, property, value, {}));
+
+		const result = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
+
+		expect(fake.task.complete_instances.sort()).toEqual(['2026-10-01', '2026-10-05']);
+		expect(result).toEqual({
+			status: 'error',
+			message: 'TaskNotes removed other days while moving scheduled to 2026-10-02; they were put back. Check this habit in TaskNotes',
+		});
 	});
 });
 

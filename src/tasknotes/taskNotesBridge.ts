@@ -1,30 +1,50 @@
 import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
-import { formatISODate, parseISODate } from '../utils/dateUtils';
+import { formatISODate, getTodayUTC, parseISODate } from '../utils/dateUtils';
 import { dtstartRepairDate } from '../utils/completionAnchorRepair';
 import { describeOutcome, diffInstances } from '../utils/instanceDiff';
+import { chooseWritePath } from '../utils/scheduledAnchor';
 import type { CycleAction, ScheduleState } from '../utils/scheduledAnchor';
+import { errorMessage, writeExactDay } from './exactDayWrite';
 
 export type { CycleAction };
 
 /**
- * Bridge to the TaskNotes plugin for recording a day on a habit (#47).
+ * Bridge to the TaskNotes plugin for recording a day on a habit (#47, #58).
  *
- * Every write goes through TaskNotes' own toggles, so TaskNotes keeps
- * owning `scheduled`, DTSTART, renamed property names, occurrence notes and
- * its cache. `taskService` and `cacheManager` are undocumented internals
- * (verified against TaskNotes 4.13.6): all access stays in this file,
- * behind shape checks. Never fall back to writing frontmatter directly —
- * that would leave `scheduled` stale.
+ * Writes go through TaskNotes' task service, never to frontmatter directly,
+ * so renamed property names, occurrence notes and TaskNotes' cache stay
+ * right. Most clicks use TaskNotes' recurring toggles, which also keep
+ * `scheduled` and DTSTART up to date. The exception is an off day of a habit
+ * that repeats from its scheduled date: the toggles would move that click
+ * onto a missed due day, so the bridge writes the exact date with
+ * `updateProperty` and moves `scheduled` itself, the way TaskNotes would.
+ *
+ * `taskService` and `cacheManager` are undocumented internals (verified
+ * against TaskNotes 4.13.6): all access stays in this file, behind shape
+ * checks.
  */
 
 type TaskRef = { path: string };
+
+export interface UpdatePropertyOptions {
+	/**
+	 * Asked when moving `scheduled` would delete instances on or after the
+	 * new date; resolving false cancels the whole write.
+	 */
+	confirmClearInstances?: (instances: { complete: string[]; skipped: string[] }) => Promise<boolean>;
+}
 
 /** The TaskNotes `taskService` methods this bridge calls. */
 export interface TaskNotesService {
 	toggleRecurringTaskCompleteWithOccurrenceNotes(task: TaskRef, date: Date): Promise<unknown>;
 	toggleRecurringTaskComplete(task: TaskRef, date: Date): Promise<unknown>;
 	toggleRecurringTaskSkipped(task: TaskRef, date: Date): Promise<unknown>;
+	/**
+	 * Writes one property as given, with no recurrence logic. Only off-day
+	 * clicks need it, so a TaskNotes without it still records due days.
+	 */
+	updateProperty?(task: TaskRef, property: string, value: unknown, options?: UpdatePropertyOptions): Promise<unknown>;
 }
 
 /** The TaskNotes TaskInfo fields this bridge reads (TaskNotes' snake_case names). */
@@ -88,6 +108,8 @@ export type CycleResult =
 			status: 'done';
 			action: CycleAction;
 			dateStr: string;
+			/** 'toggle' = TaskNotes' recurring toggles; 'exact' = updateProperty for an off day (#58). */
+			writePath: 'toggle' | 'exact';
 			repairedDate: string | null;
 			/** True when the clicked day is the only day that changed. */
 			matchedClick: boolean;
@@ -106,21 +128,23 @@ export function isDayClickInFlight(path: string): boolean {
 }
 
 /**
- * Advance one day of a habit through the click cycle via TaskNotes, then
- * repair DTSTART if the habit repeats from completion (see
- * dtstartRepairDate). The repair makes the result depend only on which days
- * end up marked, not on click order.
+ * Advance one day of a habit through the click cycle via TaskNotes.
  *
  * @param date - UTC-midnight cell date; TaskNotes formats it with UTC
  *               components, so it passes through unchanged
+ * @param today - UTC-midnight today, for where `scheduled` goes after an
+ *                off-day click
  */
-export async function cycleDay(bridge: TaskNotesBridge, path: string, date: Date): Promise<CycleResult> {
+export async function cycleDay(
+	bridge: TaskNotesBridge,
+	path: string,
+	date: Date,
+	today: Date = getTodayUTC()
+): Promise<CycleResult> {
 	if (inFlight.has(path)) return { status: 'busy' };
 	inFlight.add(path);
 
-	const task = { path };
 	const dateStr = formatISODate(date);
-	let repairing: string | null = null;
 	try {
 		// Read state from TaskNotes, not the rendered cell or our cache: both
 		// can lag TaskNotes' last write
@@ -128,54 +152,87 @@ export async function cycleDay(bridge: TaskNotesBridge, path: string, date: Date
 		if (!before) return { status: 'error', message: `TaskNotes has no task at ${path}` };
 
 		const action = nextCycleAction(before, dateStr);
-		if (action === 'complete') {
-			await bridge.service.toggleRecurringTaskCompleteWithOccurrenceNotes(task, date);
-		} else {
-			await bridge.service.toggleRecurringTaskSkipped(task, date);
+		if (chooseWritePath(before, dateStr) === 'exact') {
+			return await writeExactDay(bridge, path, before, dateStr, action, formatISODate(today));
 		}
-
-		const after = await bridge.getTaskInfo(path);
-		// Report what TaskNotes wrote, not what the click asked for. The
-		// repair below is net-zero on the lists
-		const outcome = describeOutcome(dateStr, diffInstances(before, after ?? {}));
-		const repairedDate = after
-			? dtstartRepairDate(after.recurrence_anchor, after.recurrence, after.complete_instances)
-			: null;
-		if (repairedDate) {
-			repairing = repairedDate;
-			// Off then on: marking complete is what makes TaskNotes set DTSTART
-			// and recompute `scheduled`. The plain toggle, not the occurrence-
-			// notes variant, so an occurrence note isn't touched twice
-			const repairDate = parseISODate(repairedDate);
-			await bridge.service.toggleRecurringTaskComplete(task, repairDate);
-			await bridge.service.toggleRecurringTaskComplete(task, repairDate);
-		}
-		return { status: 'done', action, dateStr, repairedDate, matchedClick: outcome.matchedClick, message: outcome.message };
+		return await toggleDay(bridge, path, date, before, dateStr, action);
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		return {
-			status: 'error',
-			message: repairing
-				? `${message} (while re-marking ${repairing}; check it is still marked done)`
-				: message,
-		};
+		return { status: 'error', message: errorMessage(error) };
 	} finally {
 		inFlight.delete(path);
 	}
 }
 
 /**
+ * The click through TaskNotes' toggles, then the DTSTART repair for habits
+ * that repeat from completion (see dtstartRepairDate). The repair makes the
+ * result depend only on which days end up marked, not on click order.
+ */
+async function toggleDay(
+	bridge: TaskNotesBridge,
+	path: string,
+	date: Date,
+	before: TaskNotesTaskState,
+	dateStr: string,
+	action: CycleAction
+): Promise<CycleResult> {
+	const task = { path };
+	if (action === 'complete') {
+		await bridge.service.toggleRecurringTaskCompleteWithOccurrenceNotes(task, date);
+	} else {
+		await bridge.service.toggleRecurringTaskSkipped(task, date);
+	}
+
+	const after = await bridge.getTaskInfo(path);
+	// Report what TaskNotes wrote, not what the click asked for. The repair
+	// below is net-zero on the lists
+	const outcome = describeOutcome(dateStr, diffInstances(before, after ?? {}));
+	const repairedDate = after
+		? dtstartRepairDate(after.recurrence_anchor, after.recurrence, after.complete_instances)
+		: null;
+	if (repairedDate) {
+		// Off then on: marking complete is what makes TaskNotes set DTSTART
+		// and recompute `scheduled`. The plain toggle, not the occurrence-
+		// notes variant, so an occurrence note isn't touched twice
+		const repairDate = parseISODate(repairedDate);
+		try {
+			await bridge.service.toggleRecurringTaskComplete(task, repairDate);
+			await bridge.service.toggleRecurringTaskComplete(task, repairDate);
+		} catch (error) {
+			return {
+				status: 'error',
+				message: `${errorMessage(error)} (while re-marking ${repairedDate}; check it is still marked done)`,
+			};
+		}
+	}
+	return {
+		status: 'done',
+		action,
+		dateStr,
+		writePath: 'toggle',
+		repairedDate,
+		matchedClick: outcome.matchedClick,
+		message: outcome.message,
+	};
+}
+
+/**
  * Click handler body for a graph cell: resolve TaskNotes, cycle the day and
  * report the outcome in a Notice. Writes nothing if TaskNotes is missing.
  */
-export async function recordDayClick(app: App, path: string, date: Date): Promise<CycleResult | null> {
+export async function recordDayClick(
+	app: App,
+	path: string,
+	date: Date,
+	today: Date = getTodayUTC()
+): Promise<CycleResult | null> {
 	const bridge = resolveTaskNotesBridge(app);
 	if (!bridge) {
 		new Notice('TaskNotes is not available (or its API changed); nothing was recorded.');
 		return null;
 	}
 
-	const result = await cycleDay(bridge, path, date);
+	const result = await cycleDay(bridge, path, date, today);
 	if (result.status === 'done') {
 		new Notice(result.message);
 	} else if (result.status === 'error') {

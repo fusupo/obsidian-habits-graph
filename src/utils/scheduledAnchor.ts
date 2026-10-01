@@ -41,6 +41,11 @@ function stringList(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((d): d is string => typeof d === 'string') : [];
 }
 
+/** The instance lists as plain string arrays (missing or odd values read as empty). */
+export function instanceLists(state: ScheduleState): { complete: string[]; skipped: string[] } {
+	return { complete: stringList(state.complete_instances), skipped: stringList(state.skipped_instances) };
+}
+
 /** Days that are already marked done or skipped. */
 function handledDays(state: ScheduleState): Set<string> {
 	return new Set([...stringList(state.complete_instances), ...stringList(state.skipped_instances)]);
@@ -170,8 +175,7 @@ export function exactInstanceLists(
 	dateStr: string,
 	action: CycleAction
 ): { complete: string[]; skipped: string[] } {
-	const complete = stringList(state.complete_instances);
-	const skipped = stringList(state.skipped_instances);
+	const { complete, skipped } = instanceLists(state);
 	switch (action) {
 		case 'complete':
 			return {
