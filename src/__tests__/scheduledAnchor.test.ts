@@ -239,6 +239,10 @@ describe('undoScheduledTarget — clearing the owed day puts scheduled back', ()
 		expect(undoScheduledTarget(mwf(), '2026-09-30', TODAY, '2026-10-02T09:00')).toBe('2026-09-30');
 	});
 
+	it('is null for completion-anchored habits (the DTSTART repair handles their undo)', () => {
+		expect(undoScheduledTarget(mwf({ recurrence_anchor: 'completion' }), '2026-09-30', TODAY, '2026-10-02')).toBeNull();
+	});
+
 	it('is null for unmodeled rules or an unreadable scheduled', () => {
 		expect(undoScheduledTarget(mwf({ recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR' }), '2026-09-30', TODAY, '2026-10-02')).toBeNull();
 		expect(undoScheduledTarget(mwf(), '2026-09-30', TODAY, undefined)).toBeNull();

@@ -3,9 +3,9 @@ import type { App } from 'obsidian';
 import { formatISODate, getTodayUTC, parseISODate } from '../utils/dateUtils';
 import { dtstartRepairDate } from '../utils/completionAnchorRepair';
 import { describeOutcome, diffInstances } from '../utils/instanceDiff';
-import { chooseWritePath } from '../utils/scheduledAnchor';
+import { chooseWritePath, undoScheduledTarget } from '../utils/scheduledAnchor';
 import type { CycleAction, ScheduleState } from '../utils/scheduledAnchor';
-import { errorMessage, writeExactDay } from './exactDayWrite';
+import { errorMessage, moveScheduled, writeExactDay } from './exactDayWrite';
 
 export type { CycleAction };
 
@@ -152,10 +152,11 @@ export async function cycleDay(
 		if (!before) return { status: 'error', message: `TaskNotes has no task at ${path}` };
 
 		const action = nextCycleAction(before, dateStr);
+		const todayStr = formatISODate(today);
 		if (chooseWritePath(before, dateStr) === 'exact') {
-			return await writeExactDay(bridge, path, before, dateStr, action, formatISODate(today));
+			return await writeExactDay(bridge, path, before, dateStr, action, todayStr);
 		}
-		return await toggleDay(bridge, path, date, before, dateStr, action);
+		return await toggleDay(bridge, path, date, before, dateStr, action, todayStr);
 	} catch (error) {
 		return { status: 'error', message: errorMessage(error) };
 	} finally {
@@ -164,9 +165,13 @@ export async function cycleDay(
 }
 
 /**
- * The click through TaskNotes' toggles, then the DTSTART repair for habits
- * that repeat from completion (see dtstartRepairDate). The repair makes the
- * result depend only on which days end up marked, not on click order.
+ * The click through TaskNotes' toggles, then:
+ * - for habits that repeat from completion, the DTSTART repair (see
+ *   dtstartRepairDate), which makes the result depend only on which days
+ *   end up marked, not on click order
+ * - for other habits, when the click clears the day that is owed again,
+ *   `scheduled` goes back to it (see undoScheduledTarget); TaskNotes never
+ *   moves it back itself
  */
 async function toggleDay(
 	bridge: TaskNotesBridge,
@@ -174,7 +179,8 @@ async function toggleDay(
 	date: Date,
 	before: TaskNotesTaskState,
 	dateStr: string,
-	action: CycleAction
+	action: CycleAction,
+	todayStr: string
 ): Promise<CycleResult> {
 	const task = { path };
 	if (action === 'complete') {
@@ -205,6 +211,16 @@ async function toggleDay(
 			};
 		}
 	}
+
+	let note = '';
+	const owed = action === 'unskip' && after ? undoScheduledTarget(after, dateStr, todayStr, after.scheduled) : null;
+	// Without updateProperty the day is still cleared; only the undo of `scheduled` is skipped
+	if (owed && after && typeof bridge.service.updateProperty === 'function') {
+		const moved = await moveScheduled(bridge, path, after, owed);
+		if ('error' in moved) return { status: 'error', message: moved.error };
+		note = moved.note || `; scheduled back to ${owed}`;
+	}
+
 	return {
 		status: 'done',
 		action,
@@ -212,7 +228,7 @@ async function toggleDay(
 		writePath: 'toggle',
 		repairedDate,
 		matchedClick: outcome.matchedClick,
-		message: outcome.message,
+		message: outcome.message + note,
 	};
 }
 

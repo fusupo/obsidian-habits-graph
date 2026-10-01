@@ -225,6 +225,8 @@ export function undoScheduledTarget(
 	todayStr: string,
 	scheduledNow: unknown
 ): string | null {
+	// Completion-anchored habits already get their undo from the DTSTART repair
+	if (state.recurrence_anchor === 'completion') return null;
 	if (!isScheduleModeled(state.recurrence) || clearedStr > todayStr) return null;
 	const target = typeof scheduledNow === 'string' ? scheduledNow.slice(0, 10) : '';
 	if (!ISO_DATE.test(target)) return null;

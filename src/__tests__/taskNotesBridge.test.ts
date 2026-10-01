@@ -487,7 +487,9 @@ describe('cycleDay — off days of scheduled-anchor habits are written exactly (
 		const clear = await cycleDay(fake.bridge, PATH, day('2026-10-01'), day(TODAY));
 		expect(fake.task.complete_instances).toEqual(original.complete);
 		expect(fake.task.skipped_instances).toEqual(original.skipped);
-		expect(clear).toMatchObject({ action: 'unskip', message: 'Marked 2026-10-01 cleared' });
+		// Wed 9/30 is still blank, so clearing Thursday makes it owed again
+		expect(fake.task.scheduled).toBe('2026-09-30');
+		expect(clear).toMatchObject({ action: 'unskip', message: 'Marked 2026-10-01 cleared; scheduled back to 2026-09-30' });
 		noToggles(fake);
 	});
 
@@ -576,6 +578,77 @@ describe('cycleDay — off days of scheduled-anchor habits are written exactly (
 			status: 'error',
 			message: 'TaskNotes removed other days while moving scheduled to 2026-10-02; they were put back. Check this habit in TaskNotes',
 		});
+	});
+});
+
+describe('cycleDay — clearing the owed day puts scheduled back (#58)', () => {
+	const clickTimes = async (fake: ReturnType<typeof makeFakeTaskNotes>, iso: string, times: number, today = TODAY) => {
+		let result;
+		for (let i = 0; i < times; i++) result = await cycleDay(fake.bridge, PATH, day(iso), day(today));
+		return result;
+	};
+
+	it('Wed 9/30 done → skipped → cleared, nothing later marked → back to 9/30', async () => {
+		const fake = makeFakeTaskNotes(MWF_HABIT);
+		await clickTimes(fake, '2026-09-30', 2);
+		expect(fake.task.scheduled).toBe('2026-10-02');
+
+		const clear = await clickTimes(fake, '2026-09-30', 1);
+
+		expect(fake.task.scheduled).toBe('2026-09-30');
+		expect(clear).toMatchObject({ writePath: 'toggle', message: 'Marked 2026-09-30 cleared; scheduled back to 2026-09-30' });
+	});
+
+	it('Thu 10/1 (off day) done → skipped → cleared with Wed 9/30 blank → back to 9/30', async () => {
+		const fake = makeFakeTaskNotes(MWF_HABIT);
+		await clickTimes(fake, '2026-10-01', 1);
+		expect(fake.task.scheduled).toBe('2026-10-02');
+		await clickTimes(fake, '2026-10-01', 1);
+
+		const clear = await clickTimes(fake, '2026-10-01', 1);
+
+		expect(fake.task.scheduled).toBe('2026-09-30');
+		expect(fake.task.complete_instances).toEqual([]);
+		expect(fake.task.skipped_instances).toEqual([]);
+		expect(clear).toMatchObject({ writePath: 'exact', message: 'Marked 2026-10-01 cleared; scheduled back to 2026-09-30' });
+	});
+
+	it('Wed 9/30 cleared while Thu 10/1 is done → stays on Fri 10/2', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, scheduled: '2026-10-02', complete_instances: ['2026-10-01'], skipped_instances: ['2026-09-30'] });
+		await clickTimes(fake, '2026-09-30', 1);
+		expect(fake.task.scheduled).toBe('2026-10-02');
+		expect(fake.updateProperty).not.toHaveBeenCalled();
+	});
+
+	it('Mon 9/28 cleared while Wed 9/30 is also blank → stays on Fri 10/2', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, scheduled: '2026-10-02', skipped_instances: ['2026-09-28'] });
+		await clickTimes(fake, '2026-09-28', 1);
+		expect(fake.task.scheduled).toBe('2026-10-02');
+		expect(fake.updateProperty).not.toHaveBeenCalled();
+	});
+
+	it('today\'s due day cleared → TaskNotes already put scheduled on it', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, scheduled: '2026-10-05', skipped_instances: ['2026-10-02'] }, '2026-10-02');
+		await clickTimes(fake, '2026-10-02', 1, '2026-10-02');
+		expect(fake.task.scheduled).toBe('2026-10-02');
+		expect(fake.updateProperty).not.toHaveBeenCalled();
+	});
+
+	it('never applies to completion-anchored habits', async () => {
+		const fake = makeFakeTaskNotes({ ...UPPER_EXPANDER, recurrence_anchor: 'completion', skipped_instances: ['2026-09-30'] });
+		await clickTimes(fake, '2026-09-30', 1);
+		expect(fake.updateProperty).not.toHaveBeenCalled();
+	});
+
+	it('still clears a due day without updateProperty, leaving scheduled to TaskNotes', async () => {
+		const fake = makeFakeTaskNotes({ ...MWF_HABIT, scheduled: '2026-10-02', skipped_instances: ['2026-09-30'] });
+		delete (fake.bridge.service as { updateProperty?: unknown }).updateProperty;
+
+		const result = await clickTimes(fake, '2026-09-30', 1);
+
+		expect(fake.task.skipped_instances).toEqual([]);
+		expect(fake.task.scheduled).toBe('2026-10-02');
+		expect(result).toMatchObject({ status: 'done', message: 'Marked 2026-09-30 cleared' });
 	});
 });
 
