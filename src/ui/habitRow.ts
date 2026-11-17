@@ -3,6 +3,7 @@ import type { TaskNote } from '../types';
 import { GraphRenderer, DayCell } from '../graphRenderer';
 import { openTaskNote } from '../utils/noteOpener';
 import { parseISODateOrNull } from '../utils/dateUtils';
+import { computeHabitStats, formatHabitStatsTooltip } from '../utils/habitStats';
 import { isDayClickInFlight, recordDayClick, resolveTaskNotesBridge } from '../tasknotes/taskNotesBridge';
 
 /**
@@ -27,6 +28,8 @@ export function buildHabitRow(plugin: OrgHabitsGraphPlugin, task: TaskNote): HTM
 	);
 
 	const streak = GraphRenderer.calculateStreak(completionDates, skippedDates, task.recurrence, task.recurrenceAnchor, scheduledDate);
+	// Shown on hover whatever showStreakCount says: that setting is for the inline 🔥 count
+	const statsTooltip = formatHabitStatsTooltip(computeHabitStats(cells, streak));
 
 	// Cells only look clickable when TaskNotes can record the day; the click
 	// itself checks again, since TaskNotes can be disabled after render
@@ -45,7 +48,8 @@ export function buildHabitRow(plugin: OrgHabitsGraphPlugin, task: TaskNote): HTM
 		streak,
 		settings.showStreakCount,
 		() => openTaskNote(plugin.app, task.path),
-		onCellClick
+		onCellClick,
+		statsTooltip
 	);
 	return row;
 }
