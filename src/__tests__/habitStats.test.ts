@@ -84,8 +84,19 @@ describe('computeHabitStats', () => {
 			// 12 skipped, 13 14 15 done.
 			const cells = GraphRenderer.generateDayCells(dates(['2025-01-13', '2025-01-14', '2025-01-15']), 3, 0, DAILY, dates(['2025-01-12']));
 			const stats = computeHabitStats(cells, 0);
-			expect(stats.ratePercent).toBeGreaterThan(0);
-			expect(stats.ratePercent).toBeLessThanOrEqual(100);
+			expect(stats.completedDays).toBe(3);
+			expect(stats.dueDays).toBe(3);
+			expect(stats.ratePercent).toBe(100);
+
+			// 12 skipped, 13 done, 14 missed, 15 done: 2/3 = 67%. Counting the
+			// skip as due would give 2/4 = 50%, as done 3/4 = 75%.
+			const mixed = computeHabitStats(
+				GraphRenderer.generateDayCells(dates(['2025-01-13', '2025-01-15']), 3, 0, DAILY, dates(['2025-01-12'])),
+				0
+			);
+			expect(mixed.completedDays).toBe(2);
+			expect(mixed.dueDays).toBe(3);
+			expect(mixed.ratePercent).toBe(67);
 		});
 
 		it('counts today only when done', () => {
