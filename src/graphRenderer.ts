@@ -265,7 +265,8 @@ export class GraphRenderer {
 		streak: number,
 		showStreak: boolean,
 		onLabelClick?: () => void,
-		onCellClick?: (cell: DayCell) => void
+		onCellClick?: (cell: DayCell) => void,
+		labelTooltip?: string
 	): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'habit-graph-row';
@@ -273,6 +274,11 @@ export class GraphRenderer {
 		const labelContainer = container.createDiv({ cls: 'habit-label' });
 		const cleanName = habitName.replace(/#habit/g, '').trim();
 		labelContainer.textContent = cleanName;
+		// Native tooltip, like the cells' <title>: hover-only, so mobile
+		// doesn't show it
+		if (labelTooltip) {
+			labelContainer.title = labelTooltip;
+		}
 
 		if (onLabelClick) {
 			// Plain listener is safe: the element is discarded on every

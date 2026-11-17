@@ -13,7 +13,7 @@ An Obsidian plugin that displays org-mode style habit consistency graphs for rec
 ## Features
 
 - 📊 **Visual consistency graphs** - See your habit completion history at a glance
-- 🔥 **Streak tracking** - Display current streak counts for each habit
+- 🔥 **Streak tracking** - Display current streak counts for each habit; hover a habit's name for its longest streak and completion rate
 - 🎨 **Org-mode colors** - Green for completed, red for missed, yellow for today
 - ⚙️ **Customizable** - Configure date ranges, habit tags, and display options
 - 🔄 **Auto-refresh** - Graphs update automatically when you complete tasks
@@ -67,7 +67,7 @@ Each habit shows a consistency graph with:
 
 ```
 Morning workout                      Daily 🔥 12
-████████████████░░░░████████!        85% (18/21)
+████████████████░░░░████████!
 ```
 
 - **█ (Green)** - Task completed on this day
@@ -76,7 +76,7 @@ Morning workout                      Daily 🔥 12
 - **Bright red** - Today, past due (a flexible-interval habit whose gap since the last completion or skip exceeds its interval)
 - **Gray** - Future days (not yet due)
 - **🔥 12** - Current streak (12 days in a row)
-- **85% (18/21)** - Completion rate over the graph window
+- **Hover the habit name** - Longest streak and completion rate over the graph window, e.g. `Longest streak: 14 · Completion: 82% (23/28 due days)`. Only due days count: rest days, skipped days and a today you haven't done yet are left out
 
 ## Settings
 
