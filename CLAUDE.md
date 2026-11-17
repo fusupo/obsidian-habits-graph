@@ -116,6 +116,18 @@ src/
 - Common classes: `Plugin`, `Modal`, `Notice`, `PluginSettingTab`, `Setting`, `Editor`, `MarkdownView`
 - API docs: https://docs.obsidian.md and https://github.com/obsidianmd/obsidian-api
 
+## Escapement Settings
+
+- **base-branch**: main
+- **static**: npx tsc -noEmit -skipLibCheck
+- **verify**: JEST_JUNIT_OUTPUT_DIR="$FACTORY_RESULTS_DIR" JEST_JUNIT_OUTPUT_NAME=junit.xml JEST_JUNIT_ADD_FILE_ATTRIBUTE=true npx jest --runInBand --reporters=default --reporters=jest-junit
+- **test-results**: junit:$FACTORY_RESULTS_DIR/junit.xml
+- **test-files**: src/**/__tests__/**, __mocks__/**
+- **sensitive-paths**: manifest.json, versions.json
+- **validation-files**: package.json, package-lock.json, jest.config.js, tsconfig.json, tsconfig.test.json, CLAUDE.md
+
+These make this plugin an Escapement factory project. `static` only typechecks: `npm run build` would write `main.js`, which Obsidian loads from this folder. `verify` runs Jest one file at a time and writes JUnit (`jest-junit`) with file paths, so a contract can name one test as `src/__tests__/x.test.ts::<name>`. This checkout lives inside a vault's `.obsidian/plugins/`, so a factory run works on a branch here in place: never add a git worktree next to it (Obsidian would load it as a second plugin), and don't run `npm run dev` or `npm run build` during a run.
+
 ## Project Context
 
 @PROJECT_LORE.md
