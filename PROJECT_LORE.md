@@ -56,6 +56,8 @@ make a wrong choice without this?
 - `generateDayCells` sortedCompletions pointer assumes completions sorted ascending — *why: the compIdx pointer advances forward through the array; reordering or unsorted input breaks per-cell rest-day detection*
 - any new status that can appear on a non-call-to-action today needs a matching `.X.today rect` fill pair in styles.css (both themes), or today renders untinted on that status — *why: the tint went from a generic CSS brightness filter to an exhaustive per-base enumeration in #41 because WebKit ignores CSS filter on SVG elements; do not "simplify" back to brightness(); note that `'overdue'` and `'missed-overdue'` (#43) are past-only by construction — today's carry-over reuses existing `'today-overdue'` so no new today-tint pair is needed*
 
+- `computeHabitStats` (src/utils/habitStats.ts) reads only DayCell statuses — `done`/`today-done` extend a run and count as due, `missed`/`missed-overdue` break it and count as due, everything else is neutral — so any new DayCell status must be classified there too — *why: the label tooltip's longest streak and completion rate derive from generateDayCells' cells instead of a second isDueOn pass (so they can't disagree with the graph); an unlisted status silently counts as neutral, neither a completion nor a miss (#56)*
+
 ## Do-not-touch
 
 - `isScheduleModeled` (src/utils/scheduledAnchor.ts) must keep requiring an explicit `DTSTART` in the recurrence string — *why: with no DTSTART, TaskNotes uses `scheduled` as the implicit start and counts occurrences from it, so the plugin moving `scheduled` would shift every due day of an interval habit; for those rules the exact date is written and `scheduled` is left alone (#58)*
